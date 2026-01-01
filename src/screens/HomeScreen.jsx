@@ -55,12 +55,14 @@ const HomeScreen = () => {
 
     const mediaQuery = query(collection(db, 'homeMedia'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(mediaQuery, (snapshot) => {
+      console.log('📱 HomeScreen: Received', snapshot.docs.length, 'media items');
       const mediaData = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
         ...docSnap.data(),
         // Generate avatar from first letter of username
         avatar: docSnap.data().username?.charAt(0).toUpperCase() || '?',
       }));
+      console.log('📱 HomeScreen: Processed media data:', mediaData);
       setVideos(mediaData);
       setLoadingMedia(false);
     });

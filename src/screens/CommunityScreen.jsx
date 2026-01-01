@@ -105,10 +105,12 @@ const CommunityScreen = () => {
     const unsubscribe = onSnapshot(
       gamesQuery,
       (snapshot) => {
+        console.log('🎮 CommunityScreen: Received', snapshot.docs.length, 'live games');
         const games = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }));
+        console.log('🎮 CommunityScreen: Processed games:', games);
         setLiveGames(games);
         setLoadingGames(false);
       },
@@ -170,17 +172,29 @@ const CommunityScreen = () => {
           }));
 
         if (!isMounted || !position?.coords) return;
-        didCenterMapRef.current = true;
 
-        mapRef.current?.animateToRegion(
-          {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            latitudeDelta: 0.06,
-            longitudeDelta: 0.06,
-          },
-          650
-        );
+        // Add delay for web to ensure ref is ready
+        if (Platform.OS === 'web') {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        // Check if animateToRegion exists before calling (native only)
+        if (mapRef.current && typeof mapRef.current.animateToRegion === 'function') {
+          didCenterMapRef.current = true;
+          mapRef.current.animateToRegion(
+            {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              latitudeDelta: 0.06,
+              longitudeDelta: 0.06,
+            },
+            650
+          );
+        } else if (Platform.OS === 'web') {
+          // On web, animateToRegion isn't supported - map will use region prop instead
+          console.log('Map centering via region prop (web)');
+          didCenterMapRef.current = true;
+        }
       } catch (error) {
         console.log('Community map location error:', error?.message ?? error);
       }
