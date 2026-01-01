@@ -789,6 +789,8 @@ const OnboardingScreen = ({ navigation }) => {
                     onPress={() => {
                       if (Platform.OS === 'web') {
                         window.open('https://treasure-island-city-games.vercel.app/terms', '_blank');
+                      } else {
+                        navigation.navigate('Terms');
                       }
                     }}
                   >
@@ -800,6 +802,8 @@ const OnboardingScreen = ({ navigation }) => {
                     onPress={() => {
                       if (Platform.OS === 'web') {
                         window.open('https://treasure-island-city-games.vercel.app/privacy', '_blank');
+                      } else {
+                        navigation.navigate('Privacy');
                       }
                     }}
                   >

@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "buildNumber": "2",
       "infoPlist": {
         "CFBundleDisplayName": "Treasure",
