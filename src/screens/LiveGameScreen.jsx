@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -17,8 +16,10 @@ import {
 } from 'react-native';
 
 // Conditionally import native modules
-let Location, Haptics;
+let Audio, Location, Haptics;
 if (Platform.OS !== 'web') {
+  const ExpoAV = require('expo-av');
+  Audio = ExpoAV.Audio;
   Location = require('expo-location');
   Haptics = require('expo-haptics');
 } else {
@@ -320,14 +321,16 @@ export default function LiveGameScreen({ route, navigation }) {
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 3000); // Hide after 3 seconds
 
-      // Play sound
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          require('../../assets/sounds/celebration.mp3')
-        );
-        await sound.playAsync();
-      } catch (_soundError) {
-        console.log('Sound file not found, skipping audio');
+      // Play sound (native only)
+      if (Platform.OS !== 'web' && Audio) {
+        try {
+          const { sound } = await Audio.Sound.createAsync(
+            require('../../assets/sounds/celebration.mp3')
+          );
+          await sound.playAsync();
+        } catch (_soundError) {
+          console.log('Sound file not found, skipping audio');
+        }
       }
 
       // Scale animation
