@@ -18,6 +18,7 @@ import LiveGameScreen from './src/screens/LiveGameScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import HowToPlayScreen from './src/screens/HowToPlayScreen';
+import EditProfileScreen from './src/screens/EditProfileScreen';
 import TermsScreen from './src/screens/TermsScreen';
 import PrivacyScreen from './src/screens/PrivacyScreen';
 
@@ -262,6 +263,7 @@ export default function App() {
             <Stack.Screen name="Admin" component={AdminScreen} />
             <Stack.Screen name="AdminMediaUpload" component={AdminMediaUploadScreen} />
             <Stack.Screen name="HowToPlay" component={HowToPlayScreen} />
+            <Stack.Screen name="EditProfile" component={EditProfileScreen} />
             <Stack.Screen name="Terms" component={TermsScreen} />
             <Stack.Screen name="Privacy" component={PrivacyScreen} />
             <Stack.Screen

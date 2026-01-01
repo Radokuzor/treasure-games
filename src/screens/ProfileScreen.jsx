@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   ActivityIndicator,
+  Image,
   View,
   Text,
   StyleSheet,
@@ -17,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { GradientBackground, GradientCard } from '../components/GradientComponents';
 import { getFirebaseAuth, getFirebaseDb, hasFirebaseConfig } from '../config/firebase';
-import { signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 
 const FRIENDS_DATA = [
@@ -34,6 +35,13 @@ const ProfileScreen = ({ navigation }) => {
   const [locationEnabled, setLocationEnabled] = useState(true);
   const [showRedeemModal, setShowRedeemModal] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [uid, setUid] = useState(null);
+  const [profile, setProfile] = useState({
+    firstName: '',
+    lastName: '',
+    username: '',
+    profileImageUrl: '',
+  });
 
   const [stats, setStats] = useState({
     balance: 75.0,
@@ -47,8 +55,21 @@ const ProfileScreen = ({ navigation }) => {
     if (!hasFirebaseConfig) return;
 
     const auth = getFirebaseAuth();
-    const uid = auth?.currentUser?.uid ?? null;
-    if (!uid) return;
+    if (!auth) return;
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUid(user?.uid ?? null);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!hasFirebaseConfig) return;
+    if (!uid) {
+      setProfile({ firstName: '', lastName: '', username: '', profileImageUrl: '' });
+      return;
+    }
 
     const db = getFirebaseDb();
     if (!db) return;
@@ -58,6 +79,18 @@ const ProfileScreen = ({ navigation }) => {
       (snap) => {
         if (!snap.exists()) return;
         const data = snap.data() ?? {};
+
+        const firstName = typeof data.firstName === 'string' ? data.firstName : '';
+        const lastName = typeof data.lastName === 'string' ? data.lastName : '';
+        const username = typeof data.username === 'string' ? data.username : '';
+        const profileImageUrl = typeof data.profileImageUrl === 'string' ? data.profileImageUrl : '';
+
+        setProfile({
+          firstName,
+          lastName,
+          username,
+          profileImageUrl,
+        });
 
         setStats((prev) => ({
           ...prev,
@@ -72,7 +105,7 @@ const ProfileScreen = ({ navigation }) => {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [uid]);
 
   const handleRedeem = async (method) => {
     if (isRedeeming) return;
@@ -166,17 +199,24 @@ const ProfileScreen = ({ navigation }) => {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <Text style={styles.profileEmoji}>👤</Text>
+            {profile.profileImageUrl ? (
+              <Image source={{ uri: profile.profileImageUrl }} style={styles.profileImage} />
+            ) : (
+              <Text style={styles.profileEmoji}>👤</Text>
+            )}
           </LinearGradient>
           
           <Text style={[styles.profileName, { color: theme.colors.text }]}>
-            John Hunter
+            {profile.firstName || profile.lastName ? `${profile.firstName} ${profile.lastName}`.trim() : ''}
           </Text>
           <Text style={[styles.profileUsername, { color: theme.colors.textSecondary }]}>
-            @john_hunter
+            {profile.username ? `@${profile.username}` : ''}
           </Text>
 
-          <TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.getParent?.()?.navigate?.('EditProfile')}
+            activeOpacity={0.8}
+          >
             <LinearGradient
               colors={theme.gradients.accent}
               style={styles.editButton}
@@ -512,6 +552,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 8,
+    overflow: 'hidden',
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
   },
   profileEmoji: {
     fontSize: 60,
