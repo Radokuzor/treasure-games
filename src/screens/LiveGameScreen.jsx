@@ -177,16 +177,28 @@ export default function LiveGameScreen({ route, navigation }) {
 
   // Listen to game updates
   useEffect(() => {
-    if (!gameId) return;
+    if (!gameId) {
+      console.error('❌ No gameId provided');
+      setLoading(false);
+      return;
+    }
 
     const db = getFirebaseDb();
+    if (!db) {
+      console.error('❌ Firebase not configured');
+      setLoading(false);
+      return;
+    }
+
     const gameRef = doc(db, 'games', gameId);
 
+    console.log('👂 Listening to game:', gameId);
     const unsubscribe = onSnapshot(
       gameRef,
       (snapshot) => {
         if (snapshot.exists()) {
           const gameData = { id: snapshot.id, ...snapshot.data() };
+          console.log('✅ Game data loaded:', gameData.name);
           setGame(gameData);
 
           // Check if current user is a winner
@@ -202,6 +214,9 @@ export default function LiveGameScreen({ route, navigation }) {
           if (gameData.status === 'completed' && !showLeaderboard) {
             setTimeout(() => setShowLeaderboard(true), 2000);
           }
+        } else {
+          console.error('❌ Game document does not exist');
+          setGame(null);
         }
         setLoading(false);
       },
@@ -685,6 +700,7 @@ export default function LiveGameScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF', // Fallback color for web
   },
   loadingContainer: {
     flex: 1,
