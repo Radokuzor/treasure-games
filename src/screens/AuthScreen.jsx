@@ -455,13 +455,28 @@ const AuthScreen = ({ navigation }) => {
                     </View>
                     <Text style={[styles.eulaText, { color: theme.colors.textSecondary }]}>
                       I agree to the{' '}
-                      <Text style={[styles.eulaLink, { color: theme.colors.accent }]}>
-                        Terms of Service
+                      <Text
+                        style={[styles.eulaLink, { color: theme.colors.accent }]}
+                        onPress={() => {
+                          if (Platform.OS === 'web') {
+                            window.open('https://treasure-island-city-games.vercel.app/terms', '_blank');
+                          }
+                        }}
+                      >
+                        Terms of Service (EULA)
                       </Text>
                       {' '}and{' '}
-                      <Text style={[styles.eulaLink, { color: theme.colors.accent }]}>
+                      <Text
+                        style={[styles.eulaLink, { color: theme.colors.accent }]}
+                        onPress={() => {
+                          if (Platform.OS === 'web') {
+                            window.open('https://treasure-island-city-games.vercel.app/privacy', '_blank');
+                          }
+                        }}
+                      >
                         Privacy Policy
                       </Text>
+                      . I understand there is zero tolerance for objectionable content or abusive behavior.
                     </Text>
                   </TouchableOpacity>
 
@@ -746,6 +761,7 @@ const styles = StyleSheet.create({
   },
   eulaLink: {
     fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   smsContainer: {
     flexDirection: 'row',

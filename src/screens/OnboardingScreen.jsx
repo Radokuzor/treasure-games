@@ -98,6 +98,8 @@ const OnboardingScreen = ({ navigation }) => {
   const [isCityPickerOpen, setIsCityPickerOpen] = useState(false);
   const [isAgePickerOpen, setIsAgePickerOpen] = useState(false);
   const [cities, setCities] = useState([]);
+  const [agreedToEULA, setAgreedToEULA] = useState(false);
+  const [agreedToSMS, setAgreedToSMS] = useState(false);
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -249,6 +251,11 @@ const OnboardingScreen = ({ navigation }) => {
     // Validate fields
     if (!email || !password || !firstName || !lastName || !city || !state || !age) {
       alert('Please fill in all fields');
+      return;
+    }
+
+    if (!agreedToEULA) {
+      alert('You must agree to the Terms of Service and Privacy Policy to continue');
       return;
     }
 
@@ -690,6 +697,72 @@ const OnboardingScreen = ({ navigation }) => {
                   {age ? age : '18+'}
                 </Text>
                 <Ionicons name="chevron-down" size={18} color="rgba(26, 26, 46, 0.6)" />
+              </TouchableOpacity>
+
+              {/* EULA Checkbox */}
+              <TouchableOpacity
+                onPress={() => setAgreedToEULA(!agreedToEULA)}
+                style={styles.eulaContainer}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    { borderColor: '#00D4E5' },
+                    agreedToEULA ? { backgroundColor: '#00D4E5' } : null,
+                  ]}
+                >
+                  {agreedToEULA && (
+                    <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                  )}
+                </View>
+                <Text style={styles.eulaText}>
+                  I agree to the{' '}
+                  <Text
+                    style={styles.eulaLink}
+                    onPress={() => {
+                      if (Platform.OS === 'web') {
+                        window.open('https://treasure-island-city-games.vercel.app/terms', '_blank');
+                      }
+                    }}
+                  >
+                    Terms of Service (EULA)
+                  </Text>
+                  {' '}and{' '}
+                  <Text
+                    style={styles.eulaLink}
+                    onPress={() => {
+                      if (Platform.OS === 'web') {
+                        window.open('https://treasure-island-city-games.vercel.app/privacy', '_blank');
+                      }
+                    }}
+                  >
+                    Privacy Policy
+                  </Text>
+                  . I understand there is zero tolerance for objectionable content or abusive behavior.
+                </Text>
+              </TouchableOpacity>
+
+              {/* SMS Opt-in Checkbox */}
+              <TouchableOpacity
+                onPress={() => setAgreedToSMS(!agreedToSMS)}
+                style={styles.smsContainer}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    { borderColor: '#00D4E5' },
+                    agreedToSMS ? { backgroundColor: '#00D4E5' } : null,
+                  ]}
+                >
+                  {agreedToSMS && (
+                    <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                  )}
+                </View>
+                <Text style={styles.smsText}>
+                  I agree to receive automated promo texts from Treasure Island City Games. Consent not a condition of purchase. Msg freq varies. Msg & data rates may apply. Reply STOP to opt out.
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity onPress={handleSignup} activeOpacity={0.8}>
@@ -1461,6 +1534,45 @@ const styles = StyleSheet.create({
   referralLottie: {
     width: 120,
     height: 120,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  eulaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  eulaText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#1A1A2E',
+  },
+  eulaLink: {
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    color: '#00D4E5',
+  },
+  smsContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  smsText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#1A1A2E',
   },
 });
 
