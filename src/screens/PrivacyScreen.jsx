@@ -82,7 +82,7 @@ const PrivacyScreen = ({ navigation }) => {
             You have the right to access or delete your data at any time.
           </Text>
           <Text style={styles.paragraph}>
-            To delete your account and all associated data, go to the Profile section in the app and select 'Delete Account' or email us at admin@fourthwatchtech.com.
+            To delete your account and all associated data, go to the Profile section in the app and select “Delete Account” or email us at admin@fourthwatchtech.com.
           </Text>
           <Text style={styles.paragraph}>
             We will process deletion requests within 30 days.
@@ -90,7 +90,7 @@ const PrivacyScreen = ({ navigation }) => {
 
           <Text style={styles.sectionTitle}>4. Third-Party Services</Text>
           <Text style={styles.paragraph}>
-            We use Google Firebase for database and authentication services. Please refer to Google's Privacy Policy for more information on how they handle data.
+            We use Google Firebase for database and authentication services. Please refer to Google’s Privacy Policy for more information on how they handle data.
           </Text>
 
           <Text style={styles.sectionTitle}>5. Security</Text>
@@ -142,6 +142,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   scrollView: {
     flex: 1,
@@ -155,6 +158,9 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.6)',
     marginBottom: 24,
     fontStyle: 'italic',
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
   sectionTitle: {
     fontSize: 18,
@@ -162,6 +168,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginTop: 24,
     marginBottom: 12,
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   subsectionTitle: {
     fontSize: 16,
@@ -169,12 +178,18 @@ const styles = StyleSheet.create({
     color: '#00D4E5',
     marginTop: 16,
     marginBottom: 8,
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   paragraph: {
     fontSize: 15,
     lineHeight: 24,
     color: 'rgba(255, 255, 255, 0.9)',
     marginBottom: 12,
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   highlightBox: {
     backgroundColor: 'rgba(0, 212, 229, 0.1)',
@@ -188,6 +203,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   footer: {
     marginTop: 32,
@@ -200,6 +218,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255, 255, 255, 0.6)',
     marginBottom: 4,
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
 });
 
