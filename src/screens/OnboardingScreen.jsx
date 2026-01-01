@@ -22,6 +22,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { getFirebaseAuth, getDb, getFirebaseStorage } from '../config/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const { width, height } = Dimensions.get('window');
 const ONBOARDING_SEEN_KEY = 'hasSeenOnboarding_v4';
@@ -259,14 +263,59 @@ const OnboardingScreen = ({ navigation }) => {
       return;
     }
 
-    // TODO: Create Firebase user here
-    // const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    // await setDoc(doc(db, 'users', userCredential.user.uid), {
-    //   firstName, lastName, city, state, age, email,
-    //   profileImage, createdAt: new Date()
-    // });
+    try {
+      // Get Firebase instances
+      const auth = getFirebaseAuth();
+      const db = getDb();
 
-    await dismissOnboardingToAuth();
+      if (!auth || !db) {
+        alert('Firebase is not configured. Please try again later.');
+        return;
+      }
+
+      // Create Firebase user account
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+
+      // Upload profile image if provided
+      let profileImageUrl = null;
+      if (profileImage) {
+        try {
+          const storage = getFirebaseStorage();
+          if (storage) {
+            const response = await fetch(profileImage);
+            const blob = await response.blob();
+            const storageRef = ref(storage, `profiles/${userCredential.user.uid}/avatar.jpg`);
+            await uploadBytes(storageRef, blob);
+            profileImageUrl = await getDownloadURL(storageRef);
+          }
+        } catch (error) {
+          console.log('Profile image upload failed:', error?.message ?? error);
+        }
+      }
+
+      // Create user document in Firestore
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        email: email.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        city: city.trim(),
+        state: state.trim().toUpperCase(),
+        age: Number(age) || null,
+        profileImageUrl,
+        smsOptIn: agreedToSMS,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      console.log('✅ User account created successfully:', userCredential.user.uid);
+
+      // Mark onboarding as complete and navigate to main app
+      await AsyncStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+      navigation.replace('MainTabs');
+    } catch (error) {
+      console.error('❌ Signup error:', error);
+      alert(error?.message || 'Failed to create account. Please try again.');
+    }
   };
 
   const handleSelectState = async (stateCode) => {
