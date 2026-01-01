@@ -21,8 +21,15 @@ let Location, Haptics;
 if (Platform.OS !== 'web') {
   Location = require('expo-location');
   Haptics = require('expo-haptics');
+} else {
+  // Web fallbacks - use browser Geolocation API
+  Location = require('expo-location');
 }
-import ConfettiCannon from 'react-native-confetti';
+// Conditionally import confetti for native only
+let ConfettiCannon;
+if (Platform.OS !== 'web') {
+  ConfettiCannon = require('react-native-confetti').default;
+}
 import {
   Timestamp,
   arrayUnion,
@@ -446,7 +453,7 @@ export default function LiveGameScreen({ route, navigation }) {
   return (
     <LinearGradient colors={getBackgroundGradient()} style={styles.container}>
       {/* Confetti */}
-      {showConfetti && (
+      {showConfetti && Platform.OS !== 'web' && ConfettiCannon && (
         <ConfettiCannon
           count={200}
           origin={{ x: SCREEN_WIDTH / 2, y: 0 }}

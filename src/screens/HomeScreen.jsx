@@ -10,6 +10,7 @@ import {
   Animated,
   ActivityIndicator,
   Image,
+  Platform,
 } from 'react-native';
 import { Audio, Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,15 +62,17 @@ const HomeScreen = () => {
   }, []);
 
   useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-      shouldDuckAndroid: false,
-      interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-      playThroughEarpieceAndroid: false,
-      staysActiveInBackground: false,
-    });
+    if (Platform.OS !== 'web') {
+      Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+        shouldDuckAndroid: false,
+        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+        playThroughEarpieceAndroid: false,
+        staysActiveInBackground: false,
+      });
+    }
   }, []);
 
   const toggleLike = (id) => {
@@ -99,14 +102,29 @@ const HomeScreen = () => {
   const renderVideo = ({ item }) => (
     <View style={styles.videoContainer}>
       {item.type === 'video' ? (
-        <Video
-          source={{ uri: item.url }}
-          style={styles.video}
-          resizeMode="cover"
-          shouldPlay={videos[currentIndex]?.id === item.id}
-          isMuted={!isFocused}
-          isLooping
-        />
+        Platform.OS === 'web' ? (
+          <video
+            src={item.url}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+            autoPlay={videos[currentIndex]?.id === item.id}
+            muted={!isFocused}
+            loop
+            playsInline
+          />
+        ) : (
+          <Video
+            source={{ uri: item.url }}
+            style={styles.video}
+            resizeMode="cover"
+            shouldPlay={videos[currentIndex]?.id === item.id}
+            isMuted={!isFocused}
+            isLooping
+          />
+        )
       ) : (
         <Image
           source={{ uri: item.url }}
