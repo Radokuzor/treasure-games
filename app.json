@@ -1,0 +1,112 @@
+{
+  "expo": {
+    "name": "Treasure",
+    "slug": "HoodGames",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "hoodgames",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "buildNumber": "2",
+      "infoPlist": {
+        "CFBundleDisplayName": "Treasure",
+        "NSLocationWhenInUseUsageDescription": "HoodGames uses your location to help you find treasure hunts nearby.",
+        "NSCameraUsageDescription": "HoodGames uses the camera to upload profile pictures and videos.",
+        "NSPhotoLibraryUsageDescription": "HoodGames needs access to your photos to set your profile picture.",
+        "NSMicrophoneUsageDescription": "HoodGames uses the microphone for video content.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.kingkuz.hoodgames",
+      "appleTeamId": "F2B5QD97WH"
+    },
+    "android": {
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "package": "com.kingkuz.hoodgames"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro",
+      "backgroundColor": "#00D4E5",
+      "name": "Treasure Island City Games",
+      "shortName": "Treasure",
+      "description": "Find treasure hunts near you and win real prizes!",
+      "display": "standalone",
+      "startUrl": "/",
+      "themeColor": "#00D4E5",
+      "orientation": "portrait"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "HoodGames needs access to your photos to set your profile picture."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "HoodGames needs your location to show nearby treasure hunts."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notificationicon.png",
+          "color": "#00D4E5",
+          "sounds": [
+            "./assets/notificationsound.wav"
+          ]
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#00D4E5"
+        }
+      ],
+      "expo-av"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c0491a95-bb5a-42d2-a435-3a938bb3634b"
+      }
+    },
+    "owner": "king_kuz"
+  }
+}
