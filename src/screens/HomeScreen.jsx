@@ -12,7 +12,6 @@ import {
   Image,
   Platform,
 } from 'react-native';
-import { Audio, Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useIsFocused } from '@react-navigation/native';
@@ -20,6 +19,14 @@ import { useTheme } from '../context/ThemeContext';
 import { GradientBackground } from '../components/GradientComponents';
 import { getDb, hasFirebaseConfig } from '../config/firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+
+// Conditionally import expo-av components only for native
+let Audio, Video;
+if (Platform.OS !== 'web') {
+  const ExpoAV = require('expo-av');
+  Audio = ExpoAV.Audio;
+  Video = ExpoAV.Video;
+}
 
 const { width, height } = Dimensions.get('window');
 
