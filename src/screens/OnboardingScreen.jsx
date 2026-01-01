@@ -163,14 +163,31 @@ const OnboardingScreen = ({ navigation }) => {
 
   const nextSlide = () => {
     if (currentSlide < 8) {
-      setCurrentSlide(currentSlide + 1);
-      scrollViewRef.current?.scrollTo({ x: (currentSlide + 1) * width, animated: true });
+      const nextIndex = currentSlide + 1;
+      setCurrentSlide(nextIndex);
+
+      // Use setTimeout to ensure state update completes before scrolling
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({
+          x: nextIndex * width,
+          animated: Platform.OS !== 'web' // Disable animation on web for reliability
+        });
+      }, 50);
     }
   };
 
   const skipToSignup = () => {
+    // Set slide first, then scroll after state update
     setCurrentSlide(8);
-    scrollViewRef.current?.scrollTo({ x: 8 * width, animated: true });
+
+    // Use setTimeout to ensure state update completes before scrolling
+    // This prevents race conditions on web
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({
+        x: 8 * width,
+        animated: Platform.OS !== 'web' // Disable animation on web for reliability
+      });
+    }, 50);
   };
 
   const onScrollEnd = (event) => {
