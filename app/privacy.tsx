@@ -163,8 +163,11 @@ const styles = StyleSheet.create({
   paragraph: {
     fontSize: 15,
     lineHeight: 24,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: '#FFFFFF',
     marginBottom: 12,
+    textShadowColor: '#000000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 0,
   },
   highlightBox: {
     backgroundColor: 'rgba(0, 212, 229, 0.1)',
@@ -178,6 +181,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     color: '#FFFFFF',
+    textShadowColor: '#000000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 0,
   },
   footer: {
     marginTop: 32,

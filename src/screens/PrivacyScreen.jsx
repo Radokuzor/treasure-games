@@ -142,9 +142,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   scrollView: {
     flex: 1,
@@ -155,12 +152,9 @@ const styles = StyleSheet.create({
   },
   lastUpdated: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: 'rgba(255, 255, 255, 0.9)',
     marginBottom: 24,
     fontStyle: 'italic',
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
   },
   sectionTitle: {
     fontSize: 18,
@@ -168,9 +162,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginTop: 24,
     marginBottom: 12,
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   subsectionTitle: {
     fontSize: 16,
@@ -178,18 +169,15 @@ const styles = StyleSheet.create({
     color: '#00D4E5',
     marginTop: 16,
     marginBottom: 8,
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   paragraph: {
     fontSize: 15,
     lineHeight: 24,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: '#FFFFFF',
     marginBottom: 12,
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    textShadowColor: '#000000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 0,
   },
   highlightBox: {
     backgroundColor: 'rgba(0, 212, 229, 0.1)',
@@ -203,9 +191,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    textShadowColor: '#000000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 0,
   },
   footer: {
     marginTop: 32,
@@ -216,11 +204,8 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: 'rgba(255, 255, 255, 0.9)',
     marginBottom: 4,
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
   },
 });
 
