@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Switch,
   Modal,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -151,7 +152,10 @@ const ProfileScreen = ({ navigation }) => {
     <GradientBackground>
       <ScrollView
         style={[styles.container, { marginBottom: insets.bottom + 85 }]}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 110 }}
+        contentContainerStyle={[
+          { paddingBottom: insets.bottom + 110 },
+          Platform.OS === 'web' && styles.webContent,
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Header */}
@@ -484,6 +488,12 @@ const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  webContent: {
+    maxWidth: 800,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 16,
   },
   header: {
     alignItems: 'center',

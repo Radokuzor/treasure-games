@@ -367,7 +367,10 @@ const CommunityScreen = () => {
     <GradientBackground>
       <ScrollView
         style={[styles.container, { marginBottom: insets.bottom + 85 }]}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 110 }}
+        contentContainerStyle={[
+          { paddingBottom: insets.bottom + 110 },
+          Platform.OS === 'web' && styles.webContent,
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Countdown Timer */}
@@ -687,6 +690,12 @@ const CommunityScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  webContent: {
+    maxWidth: 1000,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 16,
   },
   countdownContainer: {
     margin: 16,

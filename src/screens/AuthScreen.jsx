@@ -237,6 +237,7 @@ const AuthScreen = ({ navigation }) => {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            <View style={styles.webContainer}>
             {/* Logo/Icon Section */}
             <View style={styles.logoContainer}>
               <LinearGradient
@@ -552,6 +553,7 @@ const AuthScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
             </View>
+            </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -570,6 +572,15 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 24,
     justifyContent: 'center',
+    ...(Platform.OS === 'web' && {
+      alignItems: 'center',
+    }),
+  },
+  webContainer: {
+    width: '100%',
+    ...(Platform.OS === 'web' && {
+      maxWidth: 480,
+    }),
   },
   logoContainer: {
     alignItems: 'center',

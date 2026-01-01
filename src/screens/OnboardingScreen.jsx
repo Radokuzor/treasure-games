@@ -547,14 +547,14 @@ const OnboardingScreen = ({ navigation }) => {
 
           <Text style={styles.referralNote}>{"(You'll get your invite link after signup)"}</Text>
 
-          <TouchableOpacity onPress={skipToSignup} activeOpacity={0.8}>
+          <TouchableOpacity onPress={nextSlide} activeOpacity={0.8}>
             <LinearGradient
               colors={['#00D4E5', '#00E5CC']}
               style={styles.primaryButton}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={styles.primaryButtonText}>Create Account</Text>
+              <Text style={styles.primaryButtonText}>Next</Text>
               <Ionicons name="arrow-forward" size={24} color="#FFF" />
             </LinearGradient>
           </TouchableOpacity>
