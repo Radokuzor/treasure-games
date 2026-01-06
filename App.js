@@ -24,7 +24,7 @@ import PrivacyScreen from './src/screens/PrivacyScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
-const ONBOARDING_SEEN_KEY = 'hasSeenOnboarding_v4'; // Changed to v4 to test onboarding
+const ONBOARDING_SEEN_KEY = 'hasSeenOnboarding_v5'; // Changed to v5 to test onboarding
 
 const LoadingScreen = () => (
   <View style={styles.loadingContainer}>
@@ -112,8 +112,8 @@ const TabNavigator = () => {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Community" component={CommunityScreen} />
+      <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );

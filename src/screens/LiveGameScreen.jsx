@@ -74,6 +74,109 @@ export default function LiveGameScreen({ route, navigation }) {
   // Animations
   const celebrationAnim = useRef(new Animated.Value(0)).current;
   const [showConfetti, setShowConfetti] = useState(false);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimeoutRef = useRef(null);
+  const [toastMessage, setToastMessage] = useState('');
+
+  // Exit game screen
+  const handleExit = () => {
+    try {
+      if (Platform.OS === 'web') {
+        if (navigation?.canGoBack?.()) {
+          navigation.goBack();
+          return;
+        }
+        navigation?.navigate?.('MainTabs');
+        return;
+      }
+
+      navigation?.goBack?.();
+    } catch (_error) {
+      // no-op
+    }
+  };
+
+  const showToast = useCallback(
+    (message) => {
+      setToastMessage(message);
+      try {
+        if (toastTimeoutRef.current) {
+          clearTimeout(toastTimeoutRef.current);
+          toastTimeoutRef.current = null;
+        }
+
+        toastAnim.stopAnimation();
+        toastAnim.setValue(0);
+
+        Animated.timing(toastAnim, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }).start();
+
+        toastTimeoutRef.current = setTimeout(() => {
+          Animated.timing(toastAnim, {
+            toValue: 0,
+            duration: 220,
+            useNativeDriver: true,
+          }).start(() => {
+            setToastMessage('');
+          });
+        }, 2600);
+      } catch (_error) {
+        // no-op
+      }
+    },
+    [toastAnim]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
+
+  // Trigger celebration animation
+  const triggerCelebration = useCallback(async () => {
+    try {
+      // Haptic feedback
+      if (Platform.OS !== 'web' && Haptics) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+
+      // Trigger confetti
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 3000); // Hide after 3 seconds
+
+      // Play sound (native only)
+      if (Platform.OS !== 'web' && Audio) {
+        try {
+          const { sound } = await Audio.Sound.createAsync(
+            require('../../assets/sounds/celebration.mp3')
+          );
+          await sound.playAsync();
+        } catch (_soundError) {
+          console.log('Sound file not found, skipping audio');
+        }
+      }
+
+      // Scale animation
+      Animated.sequence([
+        Animated.timing(celebrationAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(celebrationAnim, {
+          toValue: 0,
+          friction: 4,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } catch (error) {
+      console.error('❌ Celebration error:', error);
+    }
+  }, [celebrationAnim]);
 
   // Get current user
   const auth = getFirebaseAuth();
@@ -233,19 +336,44 @@ export default function LiveGameScreen({ route, navigation }) {
   // Start GPS tracking
   useEffect(() => {
     let locationSubscription = null;
+    let webPollInterval = null;
 
     const startTracking = async () => {
       try {
+        if (!Location?.requestForegroundPermissionsAsync || !Location?.watchPositionAsync) {
+          console.warn('⚠️ Location APIs not available on this platform');
+          return;
+        }
+
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           console.warn('⚠️ Location permission denied');
           return;
         }
 
+        // Web: expo-location watchPosition cleanup can crash in some Safari builds.
+        // Use polling instead to avoid emitter unsubscribe issues.
+        if (Platform.OS === 'web') {
+          const poll = async () => {
+            try {
+              const pos = await Location.getCurrentPositionAsync({
+                accuracy: Location?.Accuracy?.Balanced,
+              });
+              if (pos?.coords) setUserLocation(pos.coords);
+            } catch (error) {
+              console.log('⚠️ Web location poll error:', error?.message ?? error);
+            }
+          };
+
+          await poll();
+          webPollInterval = setInterval(poll, 2500);
+          return;
+        }
+
         // Watch position with high accuracy
         locationSubscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.BestForNavigation,
+            accuracy: Location?.Accuracy?.BestForNavigation ?? Location?.Accuracy?.Balanced,
             distanceInterval: 5, // Update every 5 meters
             timeInterval: 2000, // Update every 2 seconds
           },
@@ -261,8 +389,17 @@ export default function LiveGameScreen({ route, navigation }) {
     startTracking();
 
     return () => {
+      if (webPollInterval) {
+        clearInterval(webPollInterval);
+        webPollInterval = null;
+      }
+
       if (locationSubscription) {
-        locationSubscription.remove();
+        try {
+          if (typeof locationSubscription.remove === 'function') locationSubscription.remove();
+        } catch (error) {
+          console.log('⚠️ Location subscription cleanup error:', error?.message ?? error);
+        }
       }
     };
   }, []);
@@ -309,48 +446,6 @@ export default function LiveGameScreen({ route, navigation }) {
     setCurrentPhotoIndex(index);
   };
 
-  // Trigger celebration animation
-  const triggerCelebration = useCallback(async () => {
-    try {
-      // Haptic feedback
-      if (Platform.OS !== 'web') {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-
-      // Trigger confetti
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 3000); // Hide after 3 seconds
-
-      // Play sound (native only)
-      if (Platform.OS !== 'web' && Audio) {
-        try {
-          const { sound } = await Audio.Sound.createAsync(
-            require('../../assets/sounds/celebration.mp3')
-          );
-          await sound.playAsync();
-        } catch (_soundError) {
-          console.log('Sound file not found, skipping audio');
-        }
-      }
-
-      // Scale animation
-      Animated.sequence([
-        Animated.timing(celebrationAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(celebrationAnim, {
-          toValue: 0,
-          friction: 4,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } catch (error) {
-      console.error('❌ Celebration error:', error);
-    }
-  }, [celebrationAnim]);
-
   // Submit attempt to reach location
   const handleSubmitAttempt = async () => {
     if (!game || !currentUser || !userLocation) return;
@@ -358,6 +453,21 @@ export default function LiveGameScreen({ route, navigation }) {
     try {
       if (Platform.OS !== 'web') {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+
+      const accuracyRadiusMeters = Number(game?.accuracyRadius) || 10;
+      const distanceMeters =
+        typeof distance === 'number' && Number.isFinite(distance) ? distance : Number.POSITIVE_INFINITY;
+
+      if (!Number.isFinite(distanceMeters)) {
+        showToast('Getting your distance… try again in a second.');
+        return;
+      }
+
+      if (distanceMeters > accuracyRadiusMeters) {
+        const miles = metersToMiles(distanceMeters);
+        showToast(`You're ${miles} miles away. Get closer to win.`);
+        return;
       }
 
       const db = getFirebaseDb();
@@ -375,8 +485,6 @@ export default function LiveGameScreen({ route, navigation }) {
           longitude: userLocation.longitude,
         },
       };
-
-      const distanceMeters = typeof distance === 'number' && Number.isFinite(distance) ? distance : Infinity;
 
       let didWin = false;
       let wasAlreadyWinner = false;
@@ -443,13 +551,14 @@ export default function LiveGameScreen({ route, navigation }) {
   };
 
   // Exit game screen
-  const handleExit = () => {
-    navigation.goBack();
-  };
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
+        {Platform.OS === 'web' ? (
+          <TouchableOpacity style={styles.exitButtonTop} onPress={handleExit}>
+            <Ionicons name="close" size={32} color="#1A1A2E" />
+          </TouchableOpacity>
+        ) : null}
         <ActivityIndicator size="large" color="#10B981" />
         <Text style={styles.loadingText}>Loading game...</Text>
       </View>
@@ -459,6 +568,11 @@ export default function LiveGameScreen({ route, navigation }) {
   if (!game) {
     return (
       <View style={styles.errorContainer}>
+        {Platform.OS === 'web' ? (
+          <TouchableOpacity style={styles.exitButtonTop} onPress={handleExit}>
+            <Ionicons name="close" size={32} color="#1A1A2E" />
+          </TouchableOpacity>
+        ) : null}
         <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
         <Text style={styles.errorText}>Game not found</Text>
         <TouchableOpacity style={styles.exitButton} onPress={handleExit}>
@@ -468,8 +582,8 @@ export default function LiveGameScreen({ route, navigation }) {
     );
   }
 
-  return (
-    <LinearGradient colors={getBackgroundGradient()} style={styles.container}>
+  const content = (
+    <>
       {/* Confetti */}
       {showConfetti && Platform.OS !== 'web' && ConfettiCannon && (
         <ConfettiCannon
@@ -515,10 +629,7 @@ export default function LiveGameScreen({ route, navigation }) {
             {game.cluePhotos.map((_, index) => (
               <View
                 key={index}
-                style={[
-                  styles.indicator,
-                  currentPhotoIndex === index && styles.indicatorActive,
-                ]}
+                style={[styles.indicator, currentPhotoIndex === index && styles.indicatorActive]}
               />
             ))}
           </View>
@@ -600,9 +711,7 @@ export default function LiveGameScreen({ route, navigation }) {
                 end={{ x: 1, y: 1 }}
               >
                 <Text style={styles.submitButtonText}>
-                  {distance <= (game.accuracyRadius || 10)
-                    ? '🎯 Claim Your Spot!'
-                    : '📍 Submit Attempt'}
+                  {distance <= (game.accuracyRadius || 10) ? '🎯 Claim Your Spot!' : '📍 Submit Attempt'}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -618,7 +727,7 @@ export default function LiveGameScreen({ route, navigation }) {
         <View style={styles.leaderboardContainer}>
           <Text style={styles.leaderboardTitle}>🏆 Game Complete!</Text>
 
-          <ScrollView style={styles.leaderboardScroll}>
+          <ScrollView style={styles.leaderboardScroll} scrollEnabled={Platform.OS !== 'web'}>
             {/* Winners */}
             <Text style={styles.leaderboardSection}>Winners</Text>
             {game.winners?.slice(0, game.winnerSlots).map((winner, index) => (
@@ -688,14 +797,50 @@ export default function LiveGameScreen({ route, navigation }) {
             <Ionicons name="close" size={32} color="#FFFFFF" />
           </TouchableOpacity>
           {fullScreenPhoto && (
-            <Image
-              source={{ uri: fullScreenPhoto }}
-              style={styles.fullScreenPhoto}
-              resizeMode="contain"
-            />
+            <Image source={{ uri: fullScreenPhoto }} style={styles.fullScreenPhoto} resizeMode="contain" />
           )}
         </View>
       </Modal>
+    </>
+  );
+
+  return (
+    <LinearGradient colors={getBackgroundGradient()} style={styles.container}>
+      {Platform.OS === 'web' ? (
+        <ScrollView
+          style={styles.webScroll}
+          contentContainerStyle={styles.webScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {content}
+        </ScrollView>
+      ) : (
+        content
+      )}
+
+      {toastMessage ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.toastContainer,
+            {
+              opacity: toastAnim,
+              transform: [
+                {
+                  translateY: toastAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [14, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.toastBubble}>
+            <Text style={styles.toastText}>{toastMessage}</Text>
+          </View>
+        </Animated.View>
+      ) : null}
     </LinearGradient>
   );
 }
@@ -979,5 +1124,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  webScroll: {
+    flex: 1,
+  },
+  webScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 220,
+  },
+  toastContainer: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 24,
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  toastBubble: {
+    maxWidth: 520,
+    width: '100%',
+    backgroundColor: 'rgba(26, 26, 46, 0.92)',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  toastText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });

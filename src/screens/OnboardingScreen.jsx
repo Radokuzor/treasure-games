@@ -4,6 +4,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import LottieView from 'lottie-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -22,10 +25,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { getFirebaseAuth, getDb, getFirebaseStorage } from '../config/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getDb, getFirebaseAuth, getFirebaseStorage } from '../config/firebase';
 
 const { width, height } = Dimensions.get('window');
 const ONBOARDING_SEEN_KEY = 'hasSeenOnboarding_v4';
@@ -538,7 +538,7 @@ const OnboardingScreen = ({ navigation }) => {
             { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
           ]}
         >
-          <Text style={styles.slideTitle}>Easily Cover Your Next Groceries</Text>
+          <Text style={styles.slideTitle}>Extra Cash For You Next Temu/Amazon Find</Text>
 
           <View style={styles.testimonialCard}>
             <View style={styles.testimonialHeader}>
@@ -585,6 +585,7 @@ const OnboardingScreen = ({ navigation }) => {
   );
 
   // Slide 6: Referral hook - Make money inviting friends
+  /*
   const renderReferralSlide = () => (
     <View style={styles.slide}>
       <LinearGradient colors={['#00F5D0', '#00D9F5', '#E8F9FD']} style={styles.slideGradient}>
@@ -635,6 +636,7 @@ const OnboardingScreen = ({ navigation }) => {
       </LinearGradient>
     </View>
   );
+  */
 
   // Slide 9: Sign up form
   const renderSignupSlide = () => (
@@ -893,12 +895,8 @@ const OnboardingScreen = ({ navigation }) => {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={styles.primaryButtonText}>Allow Location</Text>
+              <Text style={styles.primaryButtonText}>Continue</Text>
             </LinearGradient>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={nextSlide} style={styles.skipButton}>
-            <Text style={styles.skipButtonText}>Not now</Text>
           </TouchableOpacity>
         </Animated.View>
       </LinearGradient>
@@ -938,12 +936,8 @@ const OnboardingScreen = ({ navigation }) => {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={styles.primaryButtonText}>Turn On Notifications</Text>
+              <Text style={styles.primaryButtonText}>Continue</Text>
             </LinearGradient>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={nextSlide} style={styles.skipButton}>
-            <Text style={styles.skipButtonText}>Not now</Text>
           </TouchableOpacity>
         </Animated.View>
       </LinearGradient>
@@ -968,7 +962,7 @@ const OnboardingScreen = ({ navigation }) => {
         {renderStep2Slide()}
         {renderStep3Slide()}
         {renderSocialProofSlide()}
-        {renderReferralSlide()}
+        {/* {renderReferralSlide()} */}
         {renderLocationSlide()}
         {renderNotificationsSlide()}
         {renderSignupSlide()}

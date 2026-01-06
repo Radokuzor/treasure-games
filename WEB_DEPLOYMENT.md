@@ -74,6 +74,26 @@ npm install -g vercel
 # Deploy
 cd dist
 vercel --prod
+
+Option 1: Vercel (Current Setup - Easiest)
+You're already set up with Vercel! Just run:
+
+vercel --prod --yes
+Your PWA will be live at: https://treasure-island-city-games.vercel.app
+Option 2: Preview Deployment (for testing before production)
+
+vercel
+This creates a preview URL for testing without affecting your production site.
+Option 3: Local Testing
+Test the PWA locally before deploying:
+
+# Build the web version
+npx expo export --platform web
+
+# Serve it locally
+cd dist
+npx serve
+Then open the URL in your browser (usually http://localhost:3000)
 ```
 
 ### Option 3: Firebase Hosting
