@@ -82,7 +82,8 @@ const CommunityScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [countdown, setCountdown] = useState({ hours: 2, minutes: 34, seconds: 15 });
-  const [selectedTab, setSelectedTab] = useState('leaderboard');
+  const [selectedTab, setSelectedTab] = useState('liveGames');
+  const [showMap, setShowMap] = useState(false); // false = list view, true = map view
   const [liveGames, setLiveGames] = useState([]);
   const [loadingGames, setLoadingGames] = useState(true);
   const mapRef = useRef(null);
@@ -150,7 +151,7 @@ const CommunityScreen = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedTab !== 'map') return;
+    if (selectedTab !== 'liveGames' || !showMap) return;
     if (didCenterMapRef.current) return;
 
     let isMounted = true;
@@ -203,7 +204,7 @@ const CommunityScreen = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedTab]);
+  }, [selectedTab, showMap]);
 
   const getRankColor = (rank) => {
     switch(rank) {
@@ -422,6 +423,27 @@ const CommunityScreen = () => {
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={styles.tab}
+            onPress={() => setSelectedTab('liveGames')}
+            activeOpacity={0.7}
+          >
+            {selectedTab === 'liveGames' ? (
+              <LinearGradient
+                colors={theme.gradients.accent}
+                style={styles.activeTab}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={styles.activeTabText}>Live Games</Text>
+              </LinearGradient>
+            ) : (
+              <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
+                Live Games
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tab}
             onPress={() => setSelectedTab('leaderboard')}
             activeOpacity={0.7}
           >
@@ -461,27 +483,6 @@ const CommunityScreen = () => {
               </Text>
             )}
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => setSelectedTab('map')}
-            activeOpacity={0.7}
-          >
-            {selectedTab === 'map' ? (
-              <LinearGradient
-                colors={theme.gradients.accent}
-                style={styles.activeTab}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.activeTabText}>Map</Text>
-              </LinearGradient>
-            ) : (
-              <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                Map
-              </Text>
-            )}
-          </TouchableOpacity>
         </View>
 
         {/* Content based on selected tab */}
@@ -504,193 +505,219 @@ const CommunityScreen = () => {
             </View>
           )}
 
-          {selectedTab === 'map' && (
+          {selectedTab === 'liveGames' && (
             <View>
               <View style={styles.mapHeader}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                  🗺️ Live Games
-                </Text>
-                {loadingGames ? (
-                  <ActivityIndicator size="small" color={theme.colors.accent} />
-                ) : (
-                  <View style={styles.liveGamesBadge}>
-                    <View style={styles.livePulse} />
-                    <Text style={[styles.liveGamesCount, { color: theme.colors.text }]}>
-                      {liveGames.length} Live
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <GradientCard style={styles.mapCard}>
-                <UnifiedMapView
-                  ref={mapRef}
-                  style={styles.map}
-                  region={{
-                    latitude: liveGames.length > 0 ? liveGames[0].location.latitude : 37.7749,
-                    longitude: liveGames.length > 0 ? liveGames[0].location.longitude : -122.4194,
-                    latitudeDelta: 0.0922,
-                    longitudeDelta: 0.0421,
-                  }}
+                <View style={styles.headerLeft}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                    🎮 Live Games
+                  </Text>
+                  {loadingGames ? (
+                    <ActivityIndicator size="small" color={theme.colors.accent} />
+                  ) : (
+                    <View style={styles.liveGamesBadge}>
+                      <View style={styles.livePulse} />
+                      <Text style={[styles.liveGamesCount, { color: theme.colors.text }]}>
+                        {liveGames.length} Live
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={styles.toggleButton}
+                  onPress={() => setShowMap(!showMap)}
+                  activeOpacity={0.7}
                 >
-                  {/* Live Games Markers */}
-                  {liveGames.map((game) => (
-                    <UnifiedMarker
-                      key={game.id}
-                      coordinate={{
-                        latitude: game.location.latitude,
-                        longitude: game.location.longitude,
-                      }}
-                      onPress={() => {
-                        navigation.navigate('LiveGame', { gameId: game.id });
-                      }}
-                    >
-                      <View style={styles.markerContainer}>
-                        <LinearGradient
-                          colors={['#EF4444', '#DC2626']}
-                          style={styles.liveMarker}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                        >
-                          <Ionicons name="trophy" size={20} color="#FFFFFF" />
-                          <Text style={styles.liveMarkerText}>${game.prizeAmount}</Text>
-                        </LinearGradient>
-                        <View style={styles.livePulseBadge}>
-                          <View style={styles.livePulseInner} />
-                        </View>
-                      </View>
-                      <UnifiedCallout tooltip>
-                        <View style={styles.calloutContainer}>
-                          <Text style={styles.calloutTitle}>{game.name}</Text>
-                          <Text style={styles.calloutSubtitle}>
-                            ${game.prizeAmount} • {game.city}
-                          </Text>
-                          <Text style={styles.calloutWinners}>
-                            {game.winners?.length || 0} / {game.winnerSlots || 3} Winners
-                          </Text>
-                          <Text style={styles.calloutTap}>Tap to join!</Text>
-                        </View>
-                      </UnifiedCallout>
-                    </UnifiedMarker>
-                  ))}
-
-                  {/* Past Drops (mock data) */}
-                  {RECENT_DROPS.map((drop) => (
-                    <UnifiedMarker
-                      key={drop.id}
-                      coordinate={{ latitude: drop.lat, longitude: drop.lng }}
-                    >
-                      <View style={styles.markerContainer}>
-                        <LinearGradient
-                          colors={drop.claimed ? ['#10B981', '#059669'] : theme.gradients.primary}
-                          style={styles.marker}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                        >
-                          <Text style={styles.markerText}>{drop.amount}</Text>
-                        </LinearGradient>
-                        {drop.claimed && (
-                          <View style={styles.claimedBadge}>
-                            <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-                          </View>
-                        )}
-                      </View>
-                    </UnifiedMarker>
-                  ))}
-                </UnifiedMapView>
-              </GradientCard>
-
-              <View style={styles.mapLegend}>
-                <View style={styles.legendItem}>
-                  <LinearGradient
-                    colors={['#EF4444', '#DC2626']}
-                    style={styles.legendDot}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
+                  <Ionicons
+                    name={showMap ? 'list' : 'map'}
+                    size={20}
+                    color={theme.colors.accent}
                   />
-                  <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
-                    Live Games
+                  <Text style={[styles.toggleText, { color: theme.colors.accent }]}>
+                    {showMap ? 'List' : 'Map'}
                   </Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <LinearGradient
-                    colors={['#10B981', '#059669']}
-                    style={styles.legendDot}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  />
-                  <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
-                    Completed
-                  </Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <LinearGradient
-                    colors={theme.gradients.primary}
-                    style={styles.legendDot}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  />
-                  <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
-                    Past Drops
-                  </Text>
-                </View>
+                </TouchableOpacity>
               </View>
 
-              {/* Live Games List */}
-              {liveGames.length > 0 && (
-                <View style={styles.liveGamesList}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text, marginTop: 24 }]}>
-                    🎮 Active Games
-                  </Text>
-                  {liveGames.map((game) => (
-                    <TouchableOpacity
-                      key={game.id}
-                      activeOpacity={0.7}
-                      onPress={() => navigation.navigate('LiveGame', { gameId: game.id })}
-                    >
-                      <GradientCard style={styles.liveGameCard}>
-                        <View style={styles.liveGameHeader}>
-                          <View style={styles.liveGameInfo}>
-                            <View style={styles.liveGameTitleRow}>
-                              <Text style={[styles.liveGameName, { color: theme.colors.text }]}>
+              {!showMap ? (
+                // List View
+                <View style={styles.listContainer}>
+                  {loadingGames ? (
+                    <ActivityIndicator size="large" color={theme.colors.accent} style={{marginTop: 40}} />
+                  ) : liveGames.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="game-controller-outline" size={64} color={theme.colors.textSecondary} />
+                      <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+                        No live games right now
+                      </Text>
+                      <Text style={[styles.emptyStateSubtext, { color: theme.colors.textSecondary }]}>
+                        Check back soon for new games!
+                      </Text>
+                    </View>
+                  ) : (
+                    liveGames.map((game) => (
+                      <TouchableOpacity
+                        key={game.id}
+                        onPress={() => navigation.navigate('LiveGame', { gameId: game.id })}
+                        activeOpacity={0.8}
+                      >
+                        <GradientCard style={styles.gameCard}>
+                          <View style={styles.gameCardHeader}>
+                            <View style={styles.gameCardLeft}>
+                              <Text style={[styles.gameCardTitle, { color: theme.colors.text }]}>
                                 {game.name}
                               </Text>
-                              <View style={styles.liveIndicator}>
-                                <View style={styles.livePulseSmall} />
-                                <Text style={styles.liveText}>LIVE</Text>
-                              </View>
+                              <Text style={[styles.gameCardLocation, { color: theme.colors.textSecondary }]}>
+                                📍 {game.city}
+                              </Text>
                             </View>
-                            <Text style={[styles.liveGameCity, { color: theme.colors.textSecondary }]}>
-                              <Ionicons name="location" size={14} color={theme.colors.textSecondary} />
-                              {' '}{game.city}
-                            </Text>
+                            <View style={styles.gameCardRight}>
+                              <LinearGradient
+                                colors={['#EF4444', '#DC2626']}
+                                style={styles.liveGamePrizeBadge}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                              >
+                                <Ionicons name="trophy" size={16} color="#FFFFFF" />
+                                <Text style={styles.liveGamePrizeText}>${game.prizeAmount}</Text>
+                              </LinearGradient>
+                            </View>
                           </View>
-                          <LinearGradient
-                            colors={['#FFD700', '#FFA500']}
-                            style={styles.liveGamePrize}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                          >
-                            <Text style={styles.liveGamePrizeText}>${game.prizeAmount}</Text>
-                          </LinearGradient>
-                        </View>
-                        <View style={styles.liveGameStats}>
-                          <View style={styles.liveGameStat}>
-                            <Ionicons name="people" size={16} color={theme.colors.textSecondary} />
-                            <Text style={[styles.liveGameStatText, { color: theme.colors.textSecondary }]}>
-                              {game.participants?.length || 0} playing
-                            </Text>
+                          <View style={styles.gameCardFooter}>
+                            <View style={styles.gameCardStat}>
+                              <Ionicons name="people" size={16} color={theme.colors.accent} />
+                              <Text style={[styles.gameCardStatText, { color: theme.colors.textSecondary }]}>
+                                {game.winners?.length || 0} / {game.winnerSlots || 3} Winners
+                              </Text>
+                            </View>
+                            <View style={[styles.liveGamesBadge, { marginLeft: 'auto' }]}>
+                              <View style={styles.livePulse} />
+                              <Text style={[styles.liveGamesCount, { color: '#EF4444' }]}>
+                                LIVE
+                              </Text>
+                            </View>
                           </View>
-                          <View style={styles.liveGameStat}>
-                            <Ionicons name="trophy" size={16} color={theme.colors.warning} />
-                            <Text style={[styles.liveGameStatText, { color: theme.colors.textSecondary }]}>
-                              {game.winners?.length || 0}/{game.winnerSlots || 3} won
-                            </Text>
+                        </GradientCard>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              ) : (
+                // Map View
+                <View>
+                  <GradientCard style={styles.mapCard}>
+                    <UnifiedMapView
+                      ref={mapRef}
+                      style={styles.map}
+                      region={{
+                        latitude: liveGames.length > 0 ? liveGames[0].location.latitude : 37.7749,
+                        longitude: liveGames.length > 0 ? liveGames[0].location.longitude : -122.4194,
+                        latitudeDelta: 0.0922,
+                        longitudeDelta: 0.0421,
+                      }}
+                    >
+                      {/* Live Games Markers */}
+                      {liveGames.map((game) => (
+                        <UnifiedMarker
+                          key={game.id}
+                          coordinate={{
+                            latitude: game.location.latitude,
+                            longitude: game.location.longitude,
+                          }}
+                          onPress={() => {
+                            navigation.navigate('LiveGame', { gameId: game.id });
+                          }}
+                        >
+                          <View style={styles.markerContainer}>
+                            <LinearGradient
+                              colors={['#EF4444', '#DC2626']}
+                              style={styles.liveMarker}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                            >
+                              <Ionicons name="trophy" size={20} color="#FFFFFF" />
+                              <Text style={styles.liveMarkerText}>${game.prizeAmount}</Text>
+                            </LinearGradient>
+                            <View style={styles.livePulseBadge}>
+                              <View style={styles.livePulseInner} />
+                            </View>
                           </View>
-                        </View>
-                      </GradientCard>
-                    </TouchableOpacity>
-                  ))}
+                          <UnifiedCallout tooltip>
+                            <View style={styles.calloutContainer}>
+                              <Text style={styles.calloutTitle}>{game.name}</Text>
+                              <Text style={styles.calloutSubtitle}>
+                                ${game.prizeAmount} • {game.city}
+                              </Text>
+                              <Text style={styles.calloutWinners}>
+                                {game.winners?.length || 0} / {game.winnerSlots || 3} Winners
+                              </Text>
+                              <Text style={styles.calloutTap}>Tap to join!</Text>
+                            </View>
+                          </UnifiedCallout>
+                        </UnifiedMarker>
+                      ))}
+
+                      {/* Past Drops (mock data) */}
+                      {RECENT_DROPS.map((drop) => (
+                        <UnifiedMarker
+                          key={drop.id}
+                          coordinate={{ latitude: drop.lat, longitude: drop.lng }}
+                        >
+                          <View style={styles.markerContainer}>
+                            <LinearGradient
+                              colors={drop.claimed ? ['#10B981', '#059669'] : theme.gradients.primary}
+                              style={styles.marker}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                            >
+                              <Text style={styles.markerText}>{drop.amount}</Text>
+                            </LinearGradient>
+                            {drop.claimed && (
+                              <View style={styles.claimedBadge}>
+                                <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                              </View>
+                            )}
+                          </View>
+                        </UnifiedMarker>
+                      ))}
+                    </UnifiedMapView>
+                  </GradientCard>
+
+                  <View style={styles.mapLegend}>
+                    <View style={styles.legendItem}>
+                      <LinearGradient
+                        colors={['#EF4444', '#DC2626']}
+                        style={styles.legendDot}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      />
+                      <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
+                        Live Games
+                      </Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <LinearGradient
+                        colors={['#10B981', '#059669']}
+                        style={styles.legendDot}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      />
+                      <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
+                        Completed
+                      </Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <LinearGradient
+                        colors={theme.gradients.primary}
+                        style={styles.legendDot}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      />
+                      <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
+                        Past Drops
+                      </Text>
+                    </View>
+                  </View>
                 </View>
               )}
             </View>
@@ -1157,6 +1184,95 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginLeft: 6,
+  },
+  toggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
+  },
+  toggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  listContainer: {
+    paddingBottom: 16,
+  },
+  gameCard: {
+    padding: 16,
+    marginBottom: 12,
+  },
+  gameCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  gameCardLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  gameCardRight: {
+    alignItems: 'flex-end',
+  },
+  gameCardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  gameCardLocation: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  liveGamePrizeBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  gameCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  gameCardStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  gameCardStatText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 16,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });
 
