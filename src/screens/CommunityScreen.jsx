@@ -557,7 +557,7 @@ const CommunityScreen = () => {
                       <TouchableOpacity
                         key={game.id}
                         onPress={() => navigation.navigate('LiveGame', { gameId: game.id })}
-                        activeOpacity={0.8}
+                        activeOpacity={0.7}
                       >
                         <GradientCard style={styles.gameCard}>
                           <View style={styles.gameCardHeader}>
@@ -571,14 +571,19 @@ const CommunityScreen = () => {
                             </View>
                             <View style={styles.gameCardRight}>
                               <LinearGradient
-                                colors={['#EF4444', '#DC2626']}
+                                colors={['#FFD700', '#FFA500']}
                                 style={styles.liveGamePrizeBadge}
                                 start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
+                                end={{ x: 1, y: 0 }}
                               >
-                                <Ionicons name="trophy" size={16} color="#FFFFFF" />
                                 <Text style={styles.liveGamePrizeText}>${game.prizeAmount}</Text>
                               </LinearGradient>
+                              <View style={[styles.liveGamesBadge, { marginTop: 8 }]}>
+                                <View style={styles.livePulse} />
+                                <Text style={[styles.liveGamesCount, { color: '#EF4444' }]}>
+                                  LIVE
+                                </Text>
+                              </View>
                             </View>
                           </View>
                           <View style={styles.gameCardFooter}>
@@ -588,11 +593,9 @@ const CommunityScreen = () => {
                                 {game.winners?.length || 0} / {game.winnerSlots || 3} Winners
                               </Text>
                             </View>
-                            <View style={[styles.liveGamesBadge, { marginLeft: 'auto' }]}>
-                              <View style={styles.livePulse} />
-                              <Text style={[styles.liveGamesCount, { color: '#EF4444' }]}>
-                                LIVE
-                              </Text>
+                            <View style={styles.tapToJoinButton}>
+                              <Text style={styles.tapToJoinText}>Tap to Join</Text>
+                              <Ionicons name="chevron-forward" size={18} color="#00D4E5" />
                             </View>
                           </View>
                         </GradientCard>
@@ -1237,6 +1240,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   gameCardFooter: {
     flexDirection: 'row',
@@ -1271,6 +1276,20 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.6)',
     marginTop: 8,
     textAlign: 'center',
+  },
+  tapToJoinButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 212, 229, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+  },
+  tapToJoinText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#00D4E5',
   },
 });
 
