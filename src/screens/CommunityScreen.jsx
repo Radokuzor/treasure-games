@@ -1,20 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
 
 // Import unified map components
-import { UnifiedMapView, UnifiedMarker, UnifiedCallout } from '../components/UnifiedMapView';
+import { UnifiedCallout, UnifiedMapView, UnifiedMarker } from '../components/UnifiedMapView';
 
 // Conditionally import location module
 let Location;
@@ -24,12 +24,12 @@ if (Platform.OS !== 'web') {
   Location = require('expo-location');
 }
 
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { addDoc, collection, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../context/ThemeContext';
 import { GradientBackground, GradientCard } from '../components/GradientComponents';
 import { getFirebaseDb } from '../config/firebase';
-import { getAuth } from 'firebase/auth';
+import { useTheme } from '../context/ThemeContext';
 
 const LEADERBOARD_DATA = [
   { id: '1', name: 'Sarah Johnson', wins: 23, earnings: 12450, avatar: '👩‍🦰', rank: 1 },
@@ -207,7 +207,7 @@ const CommunityScreen = () => {
   }, [selectedTab, showMap]);
 
   const getRankColor = (rank) => {
-    switch(rank) {
+    switch (rank) {
       case 1: return theme.gradients.accent;
       case 2: return ['#C0C0C0', '#E8E8E8'];
       case 3: return ['#CD7F32', '#FFA500'];
@@ -509,9 +509,7 @@ const CommunityScreen = () => {
             <View>
               <View style={styles.mapHeader}>
                 <View style={styles.headerLeft}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                    🎮 Live Games
-                  </Text>
+
                   {loadingGames ? (
                     <ActivityIndicator size="small" color={theme.colors.accent} />
                   ) : (
@@ -543,7 +541,7 @@ const CommunityScreen = () => {
                 // List View
                 <View style={styles.listContainer}>
                   {loadingGames ? (
-                    <ActivityIndicator size="large" color={theme.colors.accent} style={{marginTop: 40}} />
+                    <ActivityIndicator size="large" color={theme.colors.accent} style={{ marginTop: 40 }} />
                   ) : liveGames.length === 0 ? (
                     <View style={styles.emptyState}>
                       <Ionicons name="game-controller-outline" size={64} color={theme.colors.textSecondary} />
