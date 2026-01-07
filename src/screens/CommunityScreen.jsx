@@ -807,14 +807,18 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   activeTab: {
-    paddingVertical: 12,
+    paddingVertical: 10.5,
+    paddingHorizontal: 12,
     borderRadius: 20,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   inactiveTab: {
-    paddingVertical: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 10.5,
     borderRadius: 20,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
@@ -824,7 +828,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   tabText: {
-    paddingVertical: 12,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
