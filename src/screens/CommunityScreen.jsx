@@ -436,9 +436,11 @@ const CommunityScreen = () => {
                 <Text style={styles.activeTabText}>Live Games</Text>
               </LinearGradient>
             ) : (
-              <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                Live Games
-              </Text>
+              <View style={styles.inactiveTab}>
+                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
+                  Live Games
+                </Text>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -457,9 +459,11 @@ const CommunityScreen = () => {
                 <Text style={styles.activeTabText}>Leaderboard</Text>
               </LinearGradient>
             ) : (
-              <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                Leaderboard
-              </Text>
+              <View style={styles.inactiveTab}>
+                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
+                  Leaderboard
+                </Text>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -478,12 +482,17 @@ const CommunityScreen = () => {
                 <Text style={styles.activeTabText}>Recent Winners</Text>
               </LinearGradient>
             ) : (
-              <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                Recent Winners
-              </Text>
+              <View style={styles.inactiveTab}>
+                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
+                  Recent Winners
+                </Text>
+              </View>
             )}
           </TouchableOpacity>
         </View>
+
+        {/* Divider */}
+        <View style={styles.headerDivider} />
 
         {/* Content based on selected tab */}
         <View style={styles.content}>
@@ -799,8 +808,15 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     paddingVertical: 12,
-    borderRadius: 16,
+    borderRadius: 20,
     alignItems: 'center',
+  },
+  inactiveTab: {
+    paddingVertical: 12,
+    borderRadius: 20,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   activeTabText: {
     color: '#FFFFFF',
@@ -812,6 +828,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  headerDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 16,
+    marginBottom: 8,
   },
   content: {
     padding: 16,
