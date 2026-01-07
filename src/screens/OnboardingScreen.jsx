@@ -538,7 +538,7 @@ const OnboardingScreen = ({ navigation }) => {
             { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
           ]}
         >
-          <Text style={styles.slideTitle}>Extra Cash For You Next Temu/Amazon Find</Text>
+          <Text style={styles.slideTitle}>Extra Cash For You Next Temu/Amazon Shopping</Text>
 
           <View style={styles.testimonialCard}>
             <View style={styles.testimonialHeader}>
@@ -568,11 +568,6 @@ const OnboardingScreen = ({ navigation }) => {
             <Text style={styles.testimonialText}>
               {'"Wow just won $75 — this is so much fun."'}
             </Text>
-          </View>
-
-          <View style={styles.fomoBanner}>
-            <Ionicons name="trending-up" size={24} color="#00D4E5" />
-            <Text style={styles.fomoText}>127 players near you are active right now</Text>
           </View>
 
           <TouchableOpacity onPress={nextSlide} style={styles.nextButton}>
