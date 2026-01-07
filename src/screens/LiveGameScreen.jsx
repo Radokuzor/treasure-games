@@ -61,6 +61,12 @@ export default function LiveGameScreen({ route, navigation }) {
   const [proximityPercent, setProximityPercent] = useState(0);
   const [oddsPercent, setOddsPercent] = useState(0);
 
+  // Compass feature
+  const [bearing, setBearing] = useState(0);
+  const [compassEnabled, setCompassEnabled] = useState(false);
+  const [showCompass, setShowCompass] = useState(false);
+  const compassRotation = useRef(new Animated.Value(0)).current;
+
   // Photo carousel
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [fullScreenPhoto, setFullScreenPhoto] = useState(null);
@@ -226,6 +232,20 @@ export default function LiveGameScreen({ route, navigation }) {
     return `${milesRounded} ${milesNumber === 1 ? 'mile' : 'miles'} away`;
   };
 
+  // Calculate bearing (direction) from user to target location
+  const calculateBearing = (lat1, lon1, lat2, lon2) => {
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const y = Math.sin(Δλ) * Math.cos(φ2);
+    const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+    const θ = Math.atan2(y, x);
+    const bearingDegrees = ((θ * 180) / Math.PI + 360) % 360; // Convert to degrees and normalize
+
+    return bearingDegrees;
+  };
+
   // Calculate proximity percentage (0 = far, 100 = at location)
   const calculateProximity = (distanceInMeters, accuracyRadius) => {
     if (!distanceInMeters) return 0;
@@ -285,6 +305,24 @@ export default function LiveGameScreen({ route, navigation }) {
 
     return [color1, color2];
   };
+
+  // Check if user has compass feature enabled
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    const userRef = doc(db, 'users', currentUser.uid);
+    const unsubscribe = onSnapshot(userRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const userData = snapshot.data();
+        setCompassEnabled(userData?.compassEnabled === true);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
 
   // Auto-join game when screen loads
   useEffect(() => {
@@ -456,7 +494,53 @@ export default function LiveGameScreen({ route, navigation }) {
 
     const odds = calculateOdds(proximity, game.winners?.length || 0, game.winnerSlots || 3);
     setOddsPercent(odds);
-  }, [userLocation, game]);
+
+    // Calculate bearing for compass
+    const bearingDegrees = calculateBearing(
+      userLocation.latitude,
+      userLocation.longitude,
+      game.location.latitude,
+      game.location.longitude
+    );
+    setBearing(bearingDegrees);
+
+    // Animate compass rotation
+    Animated.timing(compassRotation, {
+      toValue: bearingDegrees,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [userLocation, game, compassRotation]);
+
+  // Compass show/hide cycle: 7 seconds visible, 5 seconds hidden
+  useEffect(() => {
+    if (!compassEnabled || isWinner) return;
+
+    let showTimer;
+    let hideTimer;
+
+    const startCycle = () => {
+      // Show compass for 7 seconds
+      setShowCompass(true);
+
+      showTimer = setTimeout(() => {
+        // Hide compass for 5 seconds
+        setShowCompass(false);
+
+        hideTimer = setTimeout(() => {
+          // Start the cycle again
+          startCycle();
+        }, 5000); // 5 seconds hidden
+      }, 7000); // 7 seconds visible
+    };
+
+    startCycle();
+
+    return () => {
+      if (showTimer) clearTimeout(showTimer);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
+  }, [compassEnabled, isWinner]);
 
   // Auto-advance photo carousel
   useEffect(() => {
@@ -633,6 +717,36 @@ export default function LiveGameScreen({ route, navigation }) {
       <TouchableOpacity style={styles.exitButtonTop} onPress={handleExit}>
         <Ionicons name="close" size={32} color="#1A1A2E" />
       </TouchableOpacity>
+
+      {/* Compass - shows for 7s, hides for 5s */}
+      {showCompass && compassEnabled && !isWinner && (
+        <Animated.View
+          style={[
+            styles.compassContainer,
+            {
+              transform: [
+                {
+                  rotate: compassRotation.interpolate({
+                    inputRange: [0, 360],
+                    outputRange: ['0deg', '360deg'],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={['#10B981', '#059669']}
+            style={styles.compassCircle}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.compassArrow}>
+              <Ionicons name="navigate" size={32} color="#FFFFFF" />
+            </View>
+          </LinearGradient>
+        </Animated.View>
+      )}
 
       {/* Photo Carousel */}
       {game.cluePhotos && game.cluePhotos.length > 0 && (
@@ -1189,5 +1303,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  compassContainer: {
+    position: 'absolute',
+    top: 120,
+    left: 20,
+    zIndex: 50,
+  },
+  compassCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  compassArrow: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
