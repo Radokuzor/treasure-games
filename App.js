@@ -1,30 +1,30 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getFirebaseAuth, hasFirebaseConfig } from './src/config/firebase';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
-import AdminScreen from './src/screens/AdminScreen';
 import AdminMediaUploadScreen from './src/screens/AdminMediaUploadScreen';
+import AdminScreen from './src/screens/AdminScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import CommunityScreen from './src/screens/CommunityScreen';
+import EditProfileScreen from './src/screens/EditProfileScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import HowToPlayScreen from './src/screens/HowToPlayScreen';
 import LiveGameScreen from './src/screens/LiveGameScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
-import HowToPlayScreen from './src/screens/HowToPlayScreen';
-import EditProfileScreen from './src/screens/EditProfileScreen';
-import TermsScreen from './src/screens/TermsScreen';
 import PrivacyScreen from './src/screens/PrivacyScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+import TermsScreen from './src/screens/TermsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
-const ONBOARDING_SEEN_KEY = 'hasSeenOnboarding_v5'; // Changed to v5 to test onboarding
+const ONBOARDING_SEEN_KEY = 'hasSeenOnboarding_v4'; // Changed to v5 to test onboarding
 
 const LoadingScreen = () => (
   <View style={styles.loadingContainer}>

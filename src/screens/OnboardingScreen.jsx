@@ -162,7 +162,7 @@ const OnboardingScreen = ({ navigation }) => {
   };
 
   const nextSlide = () => {
-    if (currentSlide < 8) {
+    if (currentSlide < 9) {
       const nextIndex = currentSlide + 1;
       setCurrentSlide(nextIndex);
 
@@ -178,13 +178,13 @@ const OnboardingScreen = ({ navigation }) => {
 
   const skipToSignup = () => {
     // Set slide first, then scroll after state update
-    setCurrentSlide(8);
+    setCurrentSlide(9);
 
     // Use setTimeout to ensure state update completes before scrolling
     // This prevents race conditions on web
     setTimeout(() => {
       scrollViewRef.current?.scrollTo({
-        x: 8 * width,
+        x: 9 * width,
         animated: Platform.OS !== 'web' // Disable animation on web for reliability
       });
     }, 50);
@@ -579,42 +579,25 @@ const OnboardingScreen = ({ navigation }) => {
     </View>
   );
 
-  // Slide 6: Referral hook - Make money inviting friends
-  /*
-  const renderReferralSlide = () => (
+  // Slide 6: Tutorial - How to Play
+  const renderTutorialSlide = () => (
     <View style={styles.slide}>
       <LinearGradient colors={['#00F5D0', '#00D9F5', '#E8F9FD']} style={styles.slideGradient}>
         <Animated.View
           style={[
             styles.content,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
           ]}
         >
-          <View style={styles.referralAnimation}>
-            <LottieView
-              source={require('../../assets/animations/NetworkingForAll.json')}
-              autoPlay
-              loop
-              style={styles.referralLottie}
+
+          {/* Your Canva tutorial image */}
+          <View style={styles.tutorialImageContainer}>
+            <Image
+              source={require('../../assets/images/How-To-Play.png')}
+              style={styles.tutorialImage}
+              resizeMode="contain"
             />
           </View>
-
-          <Text style={styles.slideTitle}>Invite Friends, Earn More</Text>
-
-          <View style={styles.referralCard}>
-            <Text style={styles.referralTitle}>+$5 for every 10 friends</Text>
-            <Text style={styles.referralSubtitle}>
-              Invite friends with your link{'\n'}Earn $5 per 10 signups{'\n'}Run it up for gas or groceries
-            </Text>
-
-            <View style={styles.referralMath}>
-              <Text style={styles.mathText}>10 friends = $5</Text>
-              <Text style={styles.mathText}>50 friends = $25</Text>
-              <Text style={styles.mathText}>100 friends = $50</Text>
-            </View>
-          </View>
-
-          <Text style={styles.referralNote}>{"(You'll get your invite link after signup)"}</Text>
 
           <TouchableOpacity onPress={nextSlide} activeOpacity={0.8}>
             <LinearGradient
@@ -623,7 +606,7 @@ const OnboardingScreen = ({ navigation }) => {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={styles.primaryButtonText}>Next</Text>
+              <Text style={styles.primaryButtonText}>Got It!</Text>
               <Ionicons name="arrow-forward" size={24} color="#FFF" />
             </LinearGradient>
           </TouchableOpacity>
@@ -631,7 +614,88 @@ const OnboardingScreen = ({ navigation }) => {
       </LinearGradient>
     </View>
   );
-  */
+
+  // Slide 7: Location Permission
+  const renderLocationSlide = () => (
+    <View style={styles.slide}>
+      <LinearGradient colors={['#00F5D0', '#00D9F5', '#E8F9FD']} style={styles.slideGradient}>
+        <Animated.View
+          style={[
+            styles.content,
+            { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+          ]}
+        >
+          <View style={styles.permissionIcon}>
+            <LottieView
+              source={require('../../assets/animations/LocationFinding.json')}
+              autoPlay
+              loop
+              style={styles.permissionLottie}
+            />
+          </View>
+
+          <Text style={styles.permissionTitle}>Enable Location</Text>
+          <Text style={styles.permissionText}>
+            We use your location to show nearby games and keep it fair.{'\n'}
+            {'\n'}
+            You can change this anytime in Settings 📍
+          </Text>
+
+          <TouchableOpacity onPress={requestLocationPermission} activeOpacity={0.8}>
+            <LinearGradient
+              colors={['#00D4E5', '#00E5CC']}
+              style={styles.primaryButton}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.primaryButtonText}>Continue</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+      </LinearGradient>
+    </View>
+  );
+
+  // Slide 8: Notification Permission
+  const renderNotificationsSlide = () => (
+    <View style={styles.slide}>
+      <LinearGradient colors={['#B4F8C8', '#00F5D0', '#00D9F5']} style={styles.slideGradient}>
+        <Animated.View
+          style={[
+            styles.content,
+            { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+          ]}
+        >
+          <View style={styles.permissionIcon}>
+            <LottieView
+              source={require('../../assets/animations/NotificationBell.json')}
+              autoPlay
+              loop
+              style={styles.permissionLottie}
+            />
+          </View>
+
+          <Text style={styles.permissionTitle}>Be First</Text>
+          <Text style={styles.permissionText}>
+            Games can go live at any time.{'\n'}
+            {'\n'}
+            {'Turn on notifications so you can catch the next drop.'}
+          </Text>
+
+          <TouchableOpacity onPress={requestNotificationPermission} activeOpacity={0.8}>
+            <LinearGradient
+              colors={['#00D4E5', '#00E5CC']}
+              style={styles.primaryButton}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.primaryButtonText}>Continue</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+      </LinearGradient>
+    </View>
+  );
 
   // Slide 9: Sign up form
   const renderSignupSlide = () => (
@@ -857,88 +921,6 @@ const OnboardingScreen = ({ navigation }) => {
     </View>
   );
 
-  // Slide 7: Location Permission
-  const renderLocationSlide = () => (
-    <View style={styles.slide}>
-      <LinearGradient colors={['#00F5D0', '#00D9F5', '#E8F9FD']} style={styles.slideGradient}>
-        <Animated.View
-          style={[
-            styles.content,
-            { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <View style={styles.permissionIcon}>
-            <LottieView
-              source={require('../../assets/animations/LocationFinding.json')}
-              autoPlay
-              loop
-              style={styles.permissionLottie}
-            />
-          </View>
-
-          <Text style={styles.permissionTitle}>Enable Location</Text>
-          <Text style={styles.permissionText}>
-            We use your location to show nearby games and keep it fair.{'\n'}
-            {'\n'}
-            You can change this anytime in Settings 📍
-          </Text>
-
-          <TouchableOpacity onPress={requestLocationPermission} activeOpacity={0.8}>
-            <LinearGradient
-              colors={['#00D4E5', '#00E5CC']}
-              style={styles.primaryButton}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Text style={styles.primaryButtonText}>Continue</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
-      </LinearGradient>
-    </View>
-  );
-
-  // Slide 8: Notification Permission
-  const renderNotificationsSlide = () => (
-    <View style={styles.slide}>
-      <LinearGradient colors={['#B4F8C8', '#00F5D0', '#00D9F5']} style={styles.slideGradient}>
-        <Animated.View
-          style={[
-            styles.content,
-            { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <View style={styles.permissionIcon}>
-            <LottieView
-              source={require('../../assets/animations/NotificationBell.json')}
-              autoPlay
-              loop
-              style={styles.permissionLottie}
-            />
-          </View>
-
-          <Text style={styles.permissionTitle}>Be First</Text>
-          <Text style={styles.permissionText}>
-            Games can go live at any time.{'\n'}
-            {'\n'}
-            {'Turn on notifications so you can catch the next drop.'}
-          </Text>
-
-          <TouchableOpacity onPress={requestNotificationPermission} activeOpacity={0.8}>
-            <LinearGradient
-              colors={['#00D4E5', '#00E5CC']}
-              style={styles.primaryButton}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Text style={styles.primaryButtonText}>Continue</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
-      </LinearGradient>
-    </View>
-  );
-
   return (
     <Animated.View style={[styles.container, { opacity: dismissAnim }]}>
       <ScrollView
@@ -946,7 +928,7 @@ const OnboardingScreen = ({ navigation }) => {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        scrollEnabled={!isDismissing && currentSlide !== 8}
+        scrollEnabled={!isDismissing && currentSlide !== 9}
         onMomentumScrollEnd={onScrollEnd}
         style={styles.scrollView}
         keyboardShouldPersistTaps="handled"
@@ -957,7 +939,7 @@ const OnboardingScreen = ({ navigation }) => {
         {renderStep2Slide()}
         {renderStep3Slide()}
         {renderSocialProofSlide()}
-        {/* {renderReferralSlide()} */}
+        {renderTutorialSlide()}
         {renderLocationSlide()}
         {renderNotificationsSlide()}
         {renderSignupSlide()}
@@ -965,13 +947,13 @@ const OnboardingScreen = ({ navigation }) => {
 
       {/* Progress Dots */}
       <View style={styles.dotsContainer}>
-        {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((index) => (
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((index) => (
           <View key={index} style={[styles.dot, currentSlide === index && styles.activeDot]} />
         ))}
       </View>
 
-      {/* Skip Button (only on first 6 slides) */}
-      {currentSlide < 6 && (
+      {/* Skip Button (only on first 7 slides) */}
+      {currentSlide < 7 && (
         <TouchableOpacity onPress={skipToSignup} style={styles.skipTopButton}>
           <Text style={styles.skipTopButtonText}>Skip</Text>
         </TouchableOpacity>
@@ -1632,6 +1614,31 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     color: '#1A1A2E',
+  },
+  // Tutorial slide styles
+  tutorialMainTitle: {
+    fontSize: 42,
+    fontWeight: '900',
+    color: '#1A1A2E',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  tutorialImageContainer: {
+    width: '100%',
+    maxHeight: height * 0.6,
+    marginBottom: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  tutorialImage: {
+    width: '100%',
+    height: '100%',
   },
 });
 

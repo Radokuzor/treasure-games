@@ -1,5 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -18,7 +20,9 @@ import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { GradientBackground } from '../components/GradientComponents';
 import { getDb, hasFirebaseConfig } from '../config/firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirebaseAuth } from '../config/firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Conditionally import expo-av components only for native
 let Audio, Video;
@@ -30,6 +34,8 @@ if (Platform.OS !== 'web') {
 
 const { width, height } = Dimensions.get('window');
 
+const BLOCKED_USERS_KEY = 'blockedHomeMediaUsers_v1';
+
 const HomeScreen = () => {
   const { theme } = useTheme();
   const isFocused = useIsFocused();
@@ -38,8 +44,41 @@ const HomeScreen = () => {
   const [commentText, setCommentText] = useState('');
   const [videos, setVideos] = useState([]);
   const [loadingMedia, setLoadingMedia] = useState(true);
+  const [hiddenVideoIds, setHiddenVideoIds] = useState(() => new Set());
+  const [blockedUserIds, setBlockedUserIds] = useState(() => new Set());
   const slideAnim = useRef(new Animated.Value(height)).current;
-  
+
+  const visibleVideos = useMemo(() => {
+    return videos.filter(
+      (v) => !hiddenVideoIds.has(v.id) && !blockedUserIds.has(v.userId ?? v.uid ?? v.username)
+    );
+  }, [videos, hiddenVideoIds, blockedUserIds]);
+
+  useEffect(() => {
+    if (currentIndex < visibleVideos.length) return;
+    setCurrentIndex(Math.max(0, visibleVideos.length - 1));
+    if (visibleVideos.length === 0) {
+      setShowComments(false);
+    }
+  }, [currentIndex, visibleVideos.length]);
+
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(BLOCKED_USERS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        const set = new Set(Array.isArray(parsed) ? parsed : []);
+        if (isMounted) setBlockedUserIds(set);
+      } catch (_error) {
+        // ignore
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Load media from Firestore
   useEffect(() => {
     if (!hasFirebaseConfig) {
@@ -69,6 +108,113 @@ const HomeScreen = () => {
 
     return () => unsubscribe();
   }, []);
+
+  const handleHideContent = (id) => {
+    if (!id) return;
+    setHiddenVideoIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
+
+  const persistBlockedUsers = async (nextSet) => {
+    try {
+      await AsyncStorage.setItem(BLOCKED_USERS_KEY, JSON.stringify(Array.from(nextSet)));
+    } catch (_error) {
+      // ignore
+    }
+  };
+
+  const handleBlockUser = async (item) => {
+    const identifier = item?.userId ?? item?.uid ?? item?.username ?? null;
+    if (!identifier) {
+      Alert.alert('Error', 'Unable to block this user.');
+      return;
+    }
+
+    setBlockedUserIds((prev) => {
+      const next = new Set(prev);
+      next.add(identifier);
+      void persistBlockedUsers(next);
+      return next;
+    });
+
+    Alert.alert('User Blocked', `You will no longer see content from @${item.username}.`, [
+      { text: 'OK', onPress: () => handleHideContent(item.id) },
+    ]);
+  };
+
+  const handleReportContent = async (item) => {
+    try {
+      if (!hasFirebaseConfig) {
+        Alert.alert('Error', 'Reporting is not available right now.');
+        return;
+      }
+
+      const auth = getFirebaseAuth();
+      const currentUser = auth?.currentUser ?? null;
+      const db = getDb();
+
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to report content.');
+        return;
+      }
+
+      if (!db) {
+        Alert.alert('Error', 'Unable to submit report. Please try again.');
+        return;
+      }
+
+      await addDoc(collection(db, 'reports'), {
+        type: 'homeMedia',
+        contentId: item.id,
+        contentUrl: item.url ?? null,
+        reportedUserId: item.userId ?? item.uid ?? null,
+        reportedUsername: item.username ?? null,
+        reporterUserId: currentUser.uid,
+        reason: 'UGC_Safety_Violation',
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+
+      Alert.alert('Reported', 'Thank you. Our moderators will review this content.');
+      handleHideContent(item.id);
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Could not submit report.');
+    }
+  };
+
+  const handleModerationMenu = (item) => {
+    const username = item?.username ?? 'user';
+    const options = ['Block User', 'Report Content', 'Hide Video', 'Cancel'];
+    const destructiveIndex = 0;
+    const cancelIndex = 3;
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          destructiveButtonIndex: destructiveIndex,
+          cancelButtonIndex: cancelIndex,
+          title: 'Content Moderation',
+          message: `Action regarding @${username}`,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) void handleBlockUser(item);
+          else if (buttonIndex === 1) void handleReportContent(item);
+          else if (buttonIndex === 2) handleHideContent(item.id);
+        }
+      );
+    } else {
+      Alert.alert('Options', 'Choose an action', [
+        { text: 'Block User', onPress: () => void handleBlockUser(item), style: 'destructive' },
+        { text: 'Report Content', onPress: () => void handleReportContent(item) },
+        { text: 'Hide Video', onPress: () => handleHideContent(item.id) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -119,7 +265,7 @@ const HomeScreen = () => {
               height: '100%',
               objectFit: 'cover',
             }}
-            autoPlay={videos[currentIndex]?.id === item.id}
+            autoPlay={visibleVideos[currentIndex]?.id === item.id}
             muted={!isFocused}
             loop
             playsInline
@@ -129,7 +275,7 @@ const HomeScreen = () => {
             source={{ uri: item.url }}
             style={styles.video}
             resizeMode="cover"
-            shouldPlay={videos[currentIndex]?.id === item.id}
+            shouldPlay={visibleVideos[currentIndex]?.id === item.id}
             isMuted={!isFocused}
             isLooping
           />
@@ -236,6 +382,23 @@ const HomeScreen = () => {
           </LinearGradient>
           <Text style={styles.actionText}>Winner</Text>
         </View>
+
+        {/* More Options Button */}
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => handleModerationMenu(item)}
+          activeOpacity={0.7}
+        >
+          <LinearGradient
+            colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+            style={styles.actionButtonGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Ionicons name="ellipsis-horizontal" size={28} color="#FFFFFF" />
+          </LinearGradient>
+          <Text style={styles.actionText}>More</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -253,7 +416,7 @@ const HomeScreen = () => {
   }
 
   // Show empty state
-  if (videos.length === 0) {
+  if (visibleVideos.length === 0) {
     return (
       <View style={styles.container}>
         <View style={styles.emptyStateContainer}>
@@ -270,7 +433,7 @@ const HomeScreen = () => {
   return (
     <View style={styles.container}>
       <FlatList
-        data={videos}
+        data={visibleVideos}
         renderItem={renderVideo}
         keyExtractor={item => item.id}
         pagingEnabled
@@ -297,7 +460,7 @@ const HomeScreen = () => {
             <View style={styles.commentsHeader}>
               <View style={styles.commentsDragBar} />
               <Text style={[styles.commentsTitle, { color: theme.colors.text }]}>
-                {videos[currentIndex]?.comments} Comments
+                {visibleVideos[currentIndex]?.comments} Comments
               </Text>
               <TouchableOpacity onPress={closeComments} style={styles.closeButton}>
                 <Ionicons name="close" size={24} color={theme.colors.text} />

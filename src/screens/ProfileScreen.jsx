@@ -18,8 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { GradientBackground, GradientCard } from '../components/GradientComponents';
 import { getFirebaseAuth, getFirebaseDb, hasFirebaseConfig } from '../config/firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { deleteUser, onAuthStateChanged, signOut } from 'firebase/auth';
+import { collection, deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 
 const FRIENDS_DATA = [
   { id: '1', name: 'Sarah', avatar: '👩‍🦰', status: 'online' },
@@ -35,6 +35,7 @@ const ProfileScreen = ({ navigation }) => {
   const [locationEnabled, setLocationEnabled] = useState(true);
   const [showRedeemModal, setShowRedeemModal] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [uid, setUid] = useState(null);
   const [profile, setProfile] = useState({
     firstName: '',
@@ -179,6 +180,72 @@ const ProfileScreen = ({ navigation }) => {
     } finally {
       setIsRedeeming(false);
     }
+  };
+
+  const handleDeleteAccount = () => {
+    if (isDeletingAccount) return;
+
+    Alert.alert(
+      'Delete Account?',
+      "This will permanently delete your account. This can't be undone.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (!hasFirebaseConfig) {
+              Alert.alert('Firebase not configured', 'Add Firebase env vars to enable account deletion.');
+              return;
+            }
+
+            const auth = getFirebaseAuth();
+            const currentUser = auth?.currentUser ?? null;
+            const currentUid = currentUser?.uid ?? null;
+
+            if (!auth || !currentUser || !currentUid) {
+              Alert.alert('Not signed in', 'Please sign in again to delete your account.');
+              return;
+            }
+
+            try {
+              setIsDeletingAccount(true);
+
+              // Delete auth user first (may require recent login)
+              await deleteUser(currentUser);
+
+              // Best-effort cleanup of profile doc
+              const db = getFirebaseDb();
+              if (db) {
+                try {
+                  await deleteDoc(doc(db, 'users', currentUid));
+                } catch (error) {
+                  console.log('Account delete: failed to delete user profile doc:', error?.message ?? error);
+                }
+              }
+
+              const rootNavigation = navigation.getParent?.();
+              rootNavigation?.reset?.({
+                index: 0,
+                routes: [{ name: 'Auth' }],
+              });
+            } catch (error) {
+              const code = error?.code ?? '';
+              if (code === 'auth/requires-recent-login') {
+                Alert.alert(
+                  'Re-authentication required',
+                  'For security, please sign in again and then try deleting your account.'
+                );
+              } else {
+                Alert.alert('Delete account error', error?.message ?? 'Something went wrong. Please try again.');
+              }
+            } finally {
+              setIsDeletingAccount(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -423,44 +490,62 @@ const ProfileScreen = ({ navigation }) => {
           </TouchableOpacity>
         </GradientCard>
 
-        {/* Logout Button */}
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.logoutContainer}
-          onPress={async () => {
-            if (!hasFirebaseConfig) {
-              Alert.alert('Firebase not configured', 'Add Firebase env vars to enable logout.');
-              return;
-            }
+        <View style={styles.logoutContainer}>
+          {/* Logout Button */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={async () => {
+              if (!hasFirebaseConfig) {
+                Alert.alert('Firebase not configured', 'Add Firebase env vars to enable logout.');
+                return;
+              }
 
-            const firebaseAuth = getFirebaseAuth();
-            if (!firebaseAuth) {
-              Alert.alert('Firebase error', 'Auth is not available yet. Please restart the app.');
-              return;
-            }
+              const firebaseAuth = getFirebaseAuth();
+              if (!firebaseAuth) {
+                Alert.alert('Firebase error', 'Auth is not available yet. Please restart the app.');
+                return;
+              }
 
-            try {
-              await signOut(firebaseAuth);
-              const rootNavigation = navigation.getParent?.();
-              rootNavigation?.reset?.({
-                index: 0,
-                routes: [{ name: 'Auth' }],
-              });
-            } catch (error) {
-              Alert.alert('Logout error', error?.message ?? 'Something went wrong. Please try again.');
-            }
-          }}
-        >
-          <LinearGradient
-            colors={['#EF4444', '#DC2626']}
-            style={styles.logoutButton}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+              try {
+                await signOut(firebaseAuth);
+                const rootNavigation = navigation.getParent?.();
+                rootNavigation?.reset?.({
+                  index: 0,
+                  routes: [{ name: 'Auth' }],
+                });
+              } catch (error) {
+                Alert.alert('Logout error', error?.message ?? 'Something went wrong. Please try again.');
+              }
+            }}
           >
-            <Ionicons name="log-out-outline" size={24} color="#FFFFFF" />
-            <Text style={styles.logoutText}>Logout</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={['#EF4444', '#DC2626']}
+              style={styles.logoutButton}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons name="log-out-outline" size={24} color="#FFFFFF" />
+              <Text style={styles.logoutText}>Logout</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Delete Account Button */}
+          <TouchableOpacity activeOpacity={0.7} onPress={handleDeleteAccount} disabled={isDeletingAccount}>
+            <LinearGradient
+              colors={['#7F1D1D', '#991B1B']}
+              style={[styles.logoutButton, { marginTop: 12 }, isDeletingAccount ? { opacity: 0.65 } : null]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              {isDeletingAccount ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Ionicons name="trash-outline" size={24} color="#FFFFFF" />
+              )}
+              <Text style={styles.logoutText}>{isDeletingAccount ? 'Deleting...' : 'Delete Account'}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Redeem Modal */}
