@@ -203,16 +203,50 @@ export default function LiveGameScreen({ route, navigation }) {
     return (meters * 0.000621371).toFixed(1);
   };
 
+  const formatDistanceAway = (meters) => {
+    if (typeof meters !== 'number' || !Number.isFinite(meters)) return '';
+
+    const metersPerMile = 1609.344;
+    const metersPerYard = 0.9144;
+    const metersPerFoot = 0.3048;
+
+    if (meters < 10 * metersPerYard) {
+      const feet = Math.max(0, Math.round(meters / metersPerFoot));
+      return `${feet} ${feet === 1 ? 'foot' : 'feet'} away`;
+    }
+
+    if (meters < metersPerMile) {
+      const yards = Math.max(0, Math.round(meters / metersPerYard));
+      return `${yards} ${yards === 1 ? 'yard' : 'yards'} away`;
+    }
+
+    const miles = meters / metersPerMile;
+    const milesRounded = miles >= 10 ? miles.toFixed(0) : miles.toFixed(1);
+    const milesNumber = Number(milesRounded);
+    return `${milesRounded} ${milesNumber === 1 ? 'mile' : 'miles'} away`;
+  };
+
   // Calculate proximity percentage (0 = far, 100 = at location)
   const calculateProximity = (distanceInMeters, accuracyRadius) => {
     if (!distanceInMeters) return 0;
     if (distanceInMeters <= accuracyRadius) return 100;
 
-    // Use logarithmic scale for better gradient effect
-    const maxDistance = 5000; // 5km max range
-    const normalizedDistance = Math.min(distanceInMeters, maxDistance);
-    const proximity = 100 - (normalizedDistance / maxDistance) * 100;
-    return Math.max(0, Math.min(100, proximity));
+    // Keep the background mostly white until you're within ~50 yards,
+    // then fade to full green as you approach the actual spot.
+    const FADE_START_METERS = 50 * 0.9144; // 50 yards
+    const effectiveRadius = Math.max(0, Number(accuracyRadius) || 0);
+
+    if (distanceInMeters >= FADE_START_METERS) return 0;
+
+    // If the radius is >= fade start, just treat anything within fade start as "near".
+    if (effectiveRadius >= FADE_START_METERS) {
+      const ratio = 1 - distanceInMeters / FADE_START_METERS;
+      return Math.max(0, Math.min(100, Math.round(ratio * 100)));
+    }
+
+    const ratio =
+      1 - (distanceInMeters - effectiveRadius) / (FADE_START_METERS - effectiveRadius);
+    return Math.max(0, Math.min(100, Math.round(ratio * 100)));
   };
 
   // Calculate odds of winning based on proximity and current winners
@@ -465,8 +499,8 @@ export default function LiveGameScreen({ route, navigation }) {
       }
 
       if (distanceMeters > accuracyRadiusMeters) {
-        const miles = metersToMiles(distanceMeters);
-        showToast(`You're ${miles} miles away. Get closer to win.`);
+        const away = formatDistanceAway(distanceMeters);
+        showToast(`You're ${away}. Get closer to win.`);
         return;
       }
 
@@ -663,7 +697,7 @@ export default function LiveGameScreen({ route, navigation }) {
           {distance !== null && (
             <View style={styles.distanceContainer}>
               <Ionicons name="location" size={32} color="#1A1A2E" />
-              <Text style={styles.distanceText}>{metersToMiles(distance)} miles away</Text>
+              <Text style={styles.distanceText}>{formatDistanceAway(distance)}</Text>
             </View>
           )}
 

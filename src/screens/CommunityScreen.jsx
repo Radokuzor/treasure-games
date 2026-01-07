@@ -519,7 +519,7 @@ const CommunityScreen = () => {
                   end={{ x: 0, y: 1 }}
                 >
                   <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                    Recent Winners
+                    Winners
                   </Text>
                 </LinearGradient>
               </LinearGradient>
