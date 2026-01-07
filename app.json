@@ -13,10 +13,10 @@
       "buildNumber": "4",
       "infoPlist": {
         "CFBundleDisplayName": "Treasure",
-        "NSLocationWhenInUseUsageDescription": "HoodGames uses your location to help you find treasure hunts nearby.",
-        "NSCameraUsageDescription": "HoodGames uses the camera to upload profile pictures and videos.",
-        "NSPhotoLibraryUsageDescription": "HoodGames needs access to your photos to set your profile picture.",
-        "NSMicrophoneUsageDescription": "HoodGames uses the microphone for video content.",
+        "NSLocationWhenInUseUsageDescription": "Treasure Island Games uses your location to help you find treasure hunts nearby.",
+        "NSCameraUsageDescription": "Treasure Island uses the camera to upload profile pictures and videos.",
+        "NSPhotoLibraryUsageDescription": "Treasure Island needs access to your photos to set your profile picture.",
+        "NSMicrophoneUsageDescription": "Treasure Island uses the microphone for video content.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.kingkuz.hoodgames",
