@@ -493,7 +493,7 @@ const CommunityScreen = () => {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                <Text style={styles.activeTabText}>Recent Winners</Text>
+                <Text style={styles.activeTabText}>Winners</Text>
               </LinearGradient>
             ) : (
               <LinearGradient
