@@ -576,7 +576,7 @@ export default function LiveGameScreen({ route, navigation }) {
         hideTimer = setTimeout(() => {
           // Start the cycle again
           startCycle();
-        }, 5000); // 5 seconds hidden
+        }, 100); // 5 seconds hidden
       }, 7000); // 7 seconds visible
     };
 
