@@ -1,5 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import {
+  Timestamp,
+  arrayUnion,
+  doc,
+  increment,
+  onSnapshot,
+  runTransaction,
+  serverTimestamp,
+  updateDoc,
+} from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -7,12 +17,12 @@ import {
   Dimensions,
   Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  Platform,
 } from 'react-native';
 
 // Conditionally import native modules
@@ -31,16 +41,6 @@ let ConfettiCannon;
 if (Platform.OS !== 'web') {
   ConfettiCannon = require('react-native-confetti').default;
 }
-import {
-  Timestamp,
-  arrayUnion,
-  doc,
-  increment,
-  onSnapshot,
-  runTransaction,
-  serverTimestamp,
-  updateDoc,
-} from 'firebase/firestore';
 
 import { getFirebaseAuth, getFirebaseDb } from '../config/firebase';
 
@@ -63,7 +63,7 @@ export default function LiveGameScreen({ route, navigation }) {
 
   // Compass feature
   const [bearing, setBearing] = useState(0);
-  const [compassEnabled, setCompassEnabled] = useState(false);
+  const [compassEnabled, setCompassEnabled] = useState(true);
   const [showCompass, setShowCompass] = useState(false);
   const compassRotation = useRef(new Animated.Value(0)).current;
 
@@ -317,7 +317,9 @@ export default function LiveGameScreen({ route, navigation }) {
     const unsubscribe = onSnapshot(userRef, (snapshot) => {
       if (snapshot.exists()) {
         const userData = snapshot.data();
-        setCompassEnabled(userData?.compassEnabled === true);
+        setCompassEnabled(userData?.compassEnabled !== false);
+      } else {
+        setCompassEnabled(true);
       }
     });
 
