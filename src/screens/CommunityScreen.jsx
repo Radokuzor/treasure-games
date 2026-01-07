@@ -436,11 +436,18 @@ const CommunityScreen = () => {
                 <Text style={styles.activeTabText}>Live Games</Text>
               </LinearGradient>
             ) : (
-              <View style={[styles.inactiveTab, { borderColor: theme.colors.accent }]}>
-                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                  Live Games
-                </Text>
-              </View>
+              <LinearGradient
+                colors={['rgba(128, 128, 128, 0.4)', 'rgba(160, 160, 160, 0.5)']}
+                style={styles.inactiveTabBorder}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.inactiveTabInner}>
+                  <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
+                    Live Games
+                  </Text>
+                </View>
+              </LinearGradient>
             )}
           </TouchableOpacity>
 
@@ -459,11 +466,18 @@ const CommunityScreen = () => {
                 <Text style={styles.activeTabText}>Leaderboard</Text>
               </LinearGradient>
             ) : (
-              <View style={[styles.inactiveTab, { borderColor: theme.colors.accent }]}>
-                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                  Leaderboard
-                </Text>
-              </View>
+              <LinearGradient
+                colors={['rgba(128, 128, 128, 0.4)', 'rgba(160, 160, 160, 0.5)']}
+                style={styles.inactiveTabBorder}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.inactiveTabInner}>
+                  <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
+                    Leaderboard
+                  </Text>
+                </View>
+              </LinearGradient>
             )}
           </TouchableOpacity>
 
@@ -482,17 +496,29 @@ const CommunityScreen = () => {
                 <Text style={styles.activeTabText}>Recent Winners</Text>
               </LinearGradient>
             ) : (
-              <View style={[styles.inactiveTab, { borderColor: theme.colors.accent }]}>
-                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                  Recent Winners
-                </Text>
-              </View>
+              <LinearGradient
+                colors={['rgba(128, 128, 128, 0.4)', 'rgba(160, 160, 160, 0.5)']}
+                style={styles.inactiveTabBorder}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.inactiveTabInner}>
+                  <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
+                    Recent Winners
+                  </Text>
+                </View>
+              </LinearGradient>
             )}
           </TouchableOpacity>
         </View>
 
         {/* Divider */}
-        <View style={styles.headerDivider} />
+        <LinearGradient
+          colors={['rgba(128, 128, 128, 0.3)', 'rgba(160, 160, 160, 0.4)', 'rgba(128, 128, 128, 0.3)']}
+          style={styles.headerDivider}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        />
 
         {/* Content based on selected tab */}
         <View style={styles.content}>
@@ -813,13 +839,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  inactiveTab: {
+  inactiveTabBorder: {
+    padding: 1.5,
+    borderRadius: 20,
+  },
+  inactiveTabInner: {
     paddingVertical: 9,
     paddingHorizontal: 10.5,
-    borderRadius: 20,
+    borderRadius: 18.5,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    backgroundColor: 'transparent',
   },
   activeTabText: {
     color: '#FFFFFF',
@@ -833,7 +863,6 @@ const styles = StyleSheet.create({
   },
   headerDivider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     marginHorizontal: 16,
     marginBottom: 8,
   },
