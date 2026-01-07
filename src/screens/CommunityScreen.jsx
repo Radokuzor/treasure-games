@@ -436,7 +436,7 @@ const CommunityScreen = () => {
                 <Text style={styles.activeTabText}>Live Games</Text>
               </LinearGradient>
             ) : (
-              <View style={styles.inactiveTab}>
+              <View style={[styles.inactiveTab, { borderColor: theme.colors.accent }]}>
                 <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
                   Live Games
                 </Text>
@@ -459,7 +459,7 @@ const CommunityScreen = () => {
                 <Text style={styles.activeTabText}>Leaderboard</Text>
               </LinearGradient>
             ) : (
-              <View style={styles.inactiveTab}>
+              <View style={[styles.inactiveTab, { borderColor: theme.colors.accent }]}>
                 <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
                   Leaderboard
                 </Text>
@@ -482,7 +482,7 @@ const CommunityScreen = () => {
                 <Text style={styles.activeTabText}>Recent Winners</Text>
               </LinearGradient>
             ) : (
-              <View style={styles.inactiveTab}>
+              <View style={[styles.inactiveTab, { borderColor: theme.colors.accent }]}>
                 <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
                   Recent Winners
                 </Text>
@@ -820,7 +820,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   activeTabText: {
     color: '#FFFFFF',
