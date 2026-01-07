@@ -442,11 +442,16 @@ const CommunityScreen = () => {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <View style={styles.inactiveTabInner}>
+                <LinearGradient
+                  colors={theme.gradients.background}
+                  style={styles.inactiveTabInner}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                >
                   <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
                     Live Games
                   </Text>
-                </View>
+                </LinearGradient>
               </LinearGradient>
             )}
           </TouchableOpacity>
@@ -472,11 +477,16 @@ const CommunityScreen = () => {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <View style={styles.inactiveTabInner}>
+                <LinearGradient
+                  colors={theme.gradients.background}
+                  style={styles.inactiveTabInner}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                >
                   <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
                     Leaderboard
                   </Text>
-                </View>
+                </LinearGradient>
               </LinearGradient>
             )}
           </TouchableOpacity>
@@ -502,11 +512,16 @@ const CommunityScreen = () => {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <View style={styles.inactiveTabInner}>
+                <LinearGradient
+                  colors={theme.gradients.background}
+                  style={styles.inactiveTabInner}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                >
                   <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
                     Recent Winners
                   </Text>
-                </View>
+                </LinearGradient>
               </LinearGradient>
             )}
           </TouchableOpacity>
@@ -849,7 +864,6 @@ const styles = StyleSheet.create({
     borderRadius: 18.5,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
   },
   activeTabText: {
     color: '#FFFFFF',
