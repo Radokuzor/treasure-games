@@ -26,12 +26,14 @@ import {
 } from 'react-native';
 
 // Conditionally import native modules
-let Audio, Location, Haptics;
+let Audio, Location, Haptics, Magnetometer;
 if (Platform.OS !== 'web') {
   const ExpoAV = require('expo-av');
   Audio = ExpoAV.Audio;
   Location = require('expo-location');
   Haptics = require('expo-haptics');
+  const ExpoSensors = require('expo-sensors');
+  Magnetometer = ExpoSensors.Magnetometer;
 } else {
   // Web fallbacks - use browser Geolocation API
   Location = require('expo-location');
@@ -63,6 +65,7 @@ export default function LiveGameScreen({ route, navigation }) {
 
   // Compass feature
   const [bearing, setBearing] = useState(0);
+  const [deviceHeading, setDeviceHeading] = useState(0);
   const [compassEnabled, setCompassEnabled] = useState(true);
   const [showCompass, setShowCompass] = useState(false);
   const compassRotation = useRef(new Animated.Value(0)).current;
@@ -505,14 +508,55 @@ export default function LiveGameScreen({ route, navigation }) {
       game.location.longitude
     );
     setBearing(bearingDegrees);
+  }, [userLocation, game]);
 
-    // Animate compass rotation
+  // Subscribe to device magnetometer for real-time compass orientation
+  useEffect(() => {
+    if (Platform.OS === 'web' || !Magnetometer) return;
+
+    let subscription;
+
+    const startMagnetometer = async () => {
+      try {
+        // Set update interval to 100ms for smooth rotation
+        Magnetometer.setUpdateInterval(100);
+
+        subscription = Magnetometer.addListener((data) => {
+          // Calculate heading from magnetometer data
+          const { x, y } = data;
+          let heading = Math.atan2(y, x) * (180 / Math.PI);
+          // Normalize to 0-360
+          heading = (heading + 360) % 360;
+          setDeviceHeading(heading);
+        });
+      } catch (error) {
+        console.log('⚠️ Magnetometer not available:', error?.message ?? error);
+      }
+    };
+
+    startMagnetometer();
+
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      }
+    };
+  }, []);
+
+  // Update compass rotation based on bearing to target and device heading
+  useEffect(() => {
+    if (!bearing) return;
+
+    // Calculate the rotation needed: bearing to target minus current device heading
+    // This makes the arrow always point to the target regardless of phone orientation
+    const rotation = bearing - deviceHeading;
+
     Animated.timing(compassRotation, {
-      toValue: bearingDegrees,
-      duration: 300,
+      toValue: rotation,
+      duration: 100,
       useNativeDriver: true,
     }).start();
-  }, [userLocation, game, compassRotation]);
+  }, [bearing, deviceHeading, compassRotation]);
 
   // Compass show/hide cycle: 7 seconds visible, 5 seconds hidden
   useEffect(() => {
