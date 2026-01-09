@@ -2,7 +2,7 @@
   "expo": {
     "name": "Treasure",
     "slug": "HoodGames",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "hoodgames",
@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "4",
+      "buildNumber": "8",
       "infoPlist": {
         "CFBundleDisplayName": "Treasure",
         "NSLocationWhenInUseUsageDescription": "Treasure Island Games uses your location to help you find treasure hunts nearby.",
@@ -23,7 +23,7 @@
       "appleTeamId": "F2B5QD97WH"
     },
     "android": {
-      "versionCode": 4,
+      "versionCode": 8,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
