@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';
+import { browserLocalPersistence, getAuth, getReactNativePersistence, initializeAuth, setPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 // Get Firebase config from expo-constants which properly loads EXPO_PUBLIC_ variables
 const expoConfig = Constants.expoConfig?.extra || {};
@@ -47,20 +48,36 @@ export function getFirebaseAuth() {
 
   if (!auth) {
     try {
-      // CRITICAL: Always initialize auth with persistence FIRST
-      // This ensures auth tokens are saved to AsyncStorage
-      console.log('🔧 Initializing Firebase Auth with AsyncStorage persistence...');
-      auth = initializeAuth(currentApp, {
-        persistence: getReactNativePersistence(AsyncStorage),
-      });
-      console.log('✅ Firebase Auth initialized successfully with persistence');
-      console.log('🔐 Auth state will persist across app restarts');
+      // Use different persistence based on platform
+      if (Platform.OS === 'web') {
+        // Web: Use browser local storage persistence
+        console.log('🔧 Initializing Firebase Auth with browser localStorage persistence...');
+        auth = initializeAuth(currentApp, {
+          persistence: browserLocalPersistence,
+        });
+        console.log('✅ Firebase Auth initialized for WEB with localStorage persistence');
+        console.log('🔐 Auth state will persist in browser localStorage');
+      } else {
+        // Native: Use AsyncStorage persistence
+        console.log('🔧 Initializing Firebase Auth with AsyncStorage persistence...');
+        auth = initializeAuth(currentApp, {
+          persistence: getReactNativePersistence(AsyncStorage),
+        });
+        console.log('✅ Firebase Auth initialized for NATIVE with AsyncStorage persistence');
+        console.log('🔐 Auth state will persist across app restarts');
+      }
     } catch (error) {
       // If initializeAuth fails because auth is already initialized elsewhere
       if (error.code === 'auth/already-initialized') {
         console.log('⚠️ Auth already initialized - using existing instance');
         auth = getAuth(currentApp);
-        console.warn('⚠️ Warning: Using existing auth instance (may not have persistence configured)');
+
+        // Try to set persistence on existing auth instance
+        if (Platform.OS === 'web') {
+          setPersistence(auth, browserLocalPersistence)
+            .then(() => console.log('✅ Set browser localStorage persistence on existing auth'))
+            .catch((e) => console.warn('⚠️ Could not set persistence:', e.message));
+        }
       } else {
         console.error('❌ Failed to initialize auth with persistence:', error);
 
