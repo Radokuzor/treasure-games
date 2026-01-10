@@ -81,6 +81,7 @@ const CommunityScreen = () => {
   const { theme } = useTheme();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const isWeb = Platform.OS === 'web';
   const [countdown, setCountdown] = useState({ hours: 2, minutes: 34, seconds: 15 });
   const [selectedTab, setSelectedTab] = useState('liveGames');
   const [showMap, setShowMap] = useState(false); // false = list view, true = map view
@@ -420,21 +421,27 @@ const CommunityScreen = () => {
         </LinearGradient>
 
         {/* Tab Selector */}
-        <View style={styles.tabContainer}>
+        <View style={[styles.tabContainer, isWeb && styles.webTabContainer]}>
           <TouchableOpacity
-            style={styles.tab}
+            style={[styles.tab, isWeb && styles.webTab]}
             onPress={() => setSelectedTab('liveGames')}
             activeOpacity={0.7}
           >
             {selectedTab === 'liveGames' ? (
               <LinearGradient
                 colors={theme.gradients.accent}
-                style={styles.activeTab}
+                style={[styles.activeTab, isWeb && styles.webActiveTab]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
                 <Text style={styles.activeTabText}>Live Games</Text>
               </LinearGradient>
+            ) : isWeb ? (
+              <View style={styles.inactiveTab}>
+                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
+                  Live Games
+                </Text>
+              </View>
             ) : (
               <LinearGradient
                 colors={['rgba(128, 128, 128, 0.4)', 'rgba(160, 160, 160, 0.5)']}
@@ -457,19 +464,25 @@ const CommunityScreen = () => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.tab}
+            style={[styles.tab, isWeb && styles.webTab]}
             onPress={() => setSelectedTab('leaderboard')}
             activeOpacity={0.7}
           >
             {selectedTab === 'leaderboard' ? (
               <LinearGradient
                 colors={theme.gradients.accent}
-                style={styles.activeTab}
+                style={[styles.activeTab, isWeb && styles.webActiveTab]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
                 <Text style={styles.activeTabText}>Leaderboard</Text>
               </LinearGradient>
+            ) : isWeb ? (
+              <View style={styles.inactiveTab}>
+                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
+                  Leaderboard
+                </Text>
+              </View>
             ) : (
               <LinearGradient
                 colors={['rgba(128, 128, 128, 0.4)', 'rgba(160, 160, 160, 0.5)']}
@@ -492,19 +505,25 @@ const CommunityScreen = () => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.tab}
+            style={[styles.tab, isWeb && styles.webTab]}
             onPress={() => setSelectedTab('winners')}
             activeOpacity={0.7}
           >
             {selectedTab === 'winners' ? (
               <LinearGradient
                 colors={theme.gradients.accent}
-                style={styles.activeTab}
+                style={[styles.activeTab, isWeb && styles.webActiveTab]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
                 <Text style={styles.activeTabText}>Winners</Text>
               </LinearGradient>
+            ) : isWeb ? (
+              <View style={styles.inactiveTab}>
+                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
+                  Winners
+                </Text>
+              </View>
             ) : (
               <LinearGradient
                 colors={['rgba(128, 128, 128, 0.4)', 'rgba(160, 160, 160, 0.5)']}
@@ -530,7 +549,7 @@ const CommunityScreen = () => {
         {/* Divider */}
         <LinearGradient
           colors={['rgba(128, 128, 128, 0.3)', 'rgba(160, 160, 160, 0.4)', 'rgba(128, 128, 128, 0.3)']}
-          style={styles.headerDivider}
+          style={[styles.headerDivider, isWeb && styles.webHeaderDivider]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         />
@@ -636,7 +655,7 @@ const CommunityScreen = () => {
                               </View>
                             </View>
                           </View>
-                          <View style={styles.gameCardFooter}>
+                          <View style={[styles.gameCardFooter, isWeb && styles.webGameCardFooter]}>
                             <View style={styles.gameCardStat}>
                               <Ionicons name="people" size={16} color={theme.colors.accent} />
                               <Text style={[styles.gameCardStatText, { color: theme.colors.textSecondary }]}>
@@ -843,9 +862,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 16,
   },
+  webTabContainer: {
+    gap: 8,
+  },
   tab: {
     flex: 1,
     marginHorizontal: 4,
+  },
+  webTab: {
+    marginHorizontal: 0,
   },
   activeTab: {
     paddingVertical: 10.5,
@@ -853,6 +878,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  webActiveTab: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
   },
   inactiveTabBorder: {
     padding: 1.5,
@@ -864,6 +894,14 @@ const styles = StyleSheet.create({
     borderRadius: 18.5,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  inactiveTab: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   activeTabText: {
     color: '#FFFFFF',
@@ -879,6 +917,9 @@ const styles = StyleSheet.create({
     height: 1,
     marginHorizontal: 16,
     marginBottom: 8,
+  },
+  webHeaderDivider: {
+    marginBottom: 16,
   },
   content: {
     padding: 16,
@@ -1316,6 +1357,10 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  webGameCardFooter: {
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   gameCardStat: {
     flexDirection: 'row',
