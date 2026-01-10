@@ -436,12 +436,6 @@ const CommunityScreen = () => {
               >
                 <Text style={styles.activeTabText}>Live Games</Text>
               </LinearGradient>
-            ) : isWeb ? (
-              <View style={styles.inactiveTab}>
-                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                  Live Games
-                </Text>
-              </View>
             ) : (
               <LinearGradient
                 colors={['rgba(128, 128, 128, 0.4)', 'rgba(160, 160, 160, 0.5)']}
@@ -477,12 +471,6 @@ const CommunityScreen = () => {
               >
                 <Text style={styles.activeTabText}>Leaderboard</Text>
               </LinearGradient>
-            ) : isWeb ? (
-              <View style={styles.inactiveTab}>
-                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                  Leaderboard
-                </Text>
-              </View>
             ) : (
               <LinearGradient
                 colors={['rgba(128, 128, 128, 0.4)', 'rgba(160, 160, 160, 0.5)']}
@@ -518,12 +506,6 @@ const CommunityScreen = () => {
               >
                 <Text style={styles.activeTabText}>Winners</Text>
               </LinearGradient>
-            ) : isWeb ? (
-              <View style={styles.inactiveTab}>
-                <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                  Winners
-                </Text>
-              </View>
             ) : (
               <LinearGradient
                 colors={['rgba(128, 128, 128, 0.4)', 'rgba(160, 160, 160, 0.5)']}
