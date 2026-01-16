@@ -1,22 +1,40 @@
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 
 // Import unified map components
-import { UnifiedMapView, UnifiedMarker, UnifiedCircle } from '../components/UnifiedMapView';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
+import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { GradientBackground, GradientCard } from '../components/GradientComponents';
+import { UnifiedCircle, UnifiedMapView, UnifiedMarker } from '../components/UnifiedMapView';
+import { getDb, hasFirebaseConfig } from '../config/firebase';
+import { useTheme } from '../context/ThemeContext';
 
 // Conditionally import native modules
 let ImagePicker, Location;
@@ -26,24 +44,6 @@ if (Platform.OS !== 'web') {
 } else {
   Location = require('expo-location');
 }
-import { useTheme } from '../context/ThemeContext';
-import { GradientBackground, GradientCard } from '../components/GradientComponents';
-import { getDb, hasFirebaseConfig } from '../config/firebase';
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  where,
-  onSnapshot,
-  orderBy,
-  updateDoc,
-  doc,
-} from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const ADMIN_PASSWORD = '1234';
 
@@ -69,8 +69,31 @@ const AdminScreen = ({ navigation }) => {
   const [cluePhotos, setCluePhotos] = useState([]); // Array of photo URIs
   const [winnerSlots, setWinnerSlots] = useState('3');
   const [accuracyRadius, setAccuracyRadius] = useState('10');
-  const [virtualGameType, setVirtualGameType] = useState('tap');
+  
+  // Virtual game settings (same options as mini-games)
+  const [virtualGameType, setVirtualGameType] = useState('tap_count'); // 'tap_count', 'hold_duration', 'rhythm_tap', 'custom'
+  const [virtualTargetTaps, setVirtualTargetTaps] = useState('100');
+  const [virtualTimeLimit, setVirtualTimeLimit] = useState('30');
+  const [virtualHoldDuration, setVirtualHoldDuration] = useState('5000');
+  const [virtualBpm, setVirtualBpm] = useState('120');
+  const [virtualRequiredBeats, setVirtualRequiredBeats] = useState('10');
+  const [virtualToleranceMs, setVirtualToleranceMs] = useState('150');
+  const [customVirtualGameFile, setCustomVirtualGameFile] = useState(null);
+  const [customVirtualGameFileName, setCustomVirtualGameFileName] = useState('');
+  
+  // Legacy - keeping for backwards compatibility
   const [targetTaps, setTargetTaps] = useState('1000');
+
+  // Mini-game challenge settings (for location games)
+  const [miniGameType, setMiniGameType] = useState('none'); // 'none', 'tap_count', 'hold_duration', 'rhythm_tap', 'custom'
+  const [miniGameTargetTaps, setMiniGameTargetTaps] = useState('100');
+  const [miniGameTimeLimit, setMiniGameTimeLimit] = useState('30');
+  const [miniGameHoldDuration, setMiniGameHoldDuration] = useState('5000');
+  const [miniGameBpm, setMiniGameBpm] = useState('120');
+  const [miniGameRequiredBeats, setMiniGameRequiredBeats] = useState('10');
+  const [miniGameToleranceMs, setMiniGameToleranceMs] = useState('150');
+  const [customMiniGameFile, setCustomMiniGameFile] = useState(null); // Custom HTML file URI
+  const [customMiniGameFileName, setCustomMiniGameFileName] = useState('');
 
   // UI states
   const [isCreating, setIsCreating] = useState(false);
@@ -344,6 +367,96 @@ const AdminScreen = ({ navigation }) => {
     setWinnerSlots('3');
     setAccuracyRadius('10');
     setTargetTaps('1000');
+    // Reset virtual game settings
+    setVirtualGameType('tap_count');
+    setVirtualTargetTaps('100');
+    setVirtualTimeLimit('30');
+    setVirtualHoldDuration('5000');
+    setVirtualBpm('120');
+    setVirtualRequiredBeats('10');
+    setVirtualToleranceMs('150');
+    setCustomVirtualGameFile(null);
+    setCustomVirtualGameFileName('');
+    // Reset mini-game settings
+    setMiniGameType('none');
+    setMiniGameTargetTaps('100');
+    setMiniGameTimeLimit('30');
+    setMiniGameHoldDuration('5000');
+    setMiniGameBpm('120');
+    setMiniGameRequiredBeats('10');
+    setMiniGameToleranceMs('150');
+    setCustomMiniGameFile(null);
+    setCustomMiniGameFileName('');
+  };
+
+  // Pick custom HTML game file
+  const pickCustomGameFile = async () => {
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.html,text/html';
+
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          setCustomMiniGameFileName(file.name);
+          // Create a blob URL for the file
+          const fileUrl = URL.createObjectURL(file);
+          setCustomMiniGameFile({ uri: fileUrl, file: file, name: file.name });
+        }
+      };
+
+      input.click();
+      return;
+    }
+
+    // For native, we'll use document picker
+    try {
+      const DocumentPicker = require('expo-document-picker');
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'text/html',
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        setCustomMiniGameFileName(asset.name);
+        setCustomMiniGameFile({ uri: asset.uri, name: asset.name });
+      }
+    } catch (error) {
+      console.error('Document picker error:', error);
+      Alert.alert('Error', 'Failed to pick HTML file. Please try again.');
+    }
+  };
+
+  // Upload custom game HTML to Firebase Storage
+  const uploadCustomGameToStorage = async (fileData, gameId) => {
+    try {
+      let blob;
+      
+      if (Platform.OS === 'web' && fileData.file) {
+        // Web: use the file directly
+        blob = fileData.file;
+      } else {
+        // Native: fetch the file URI
+        const response = await fetch(fileData.uri);
+        blob = await response.blob();
+      }
+
+      const storage = getStorage();
+      const filename = `games/${gameId}/mini-game.html`;
+      const storageRef = ref(storage, filename);
+      
+      await uploadBytes(storageRef, blob, {
+        contentType: 'text/html',
+      });
+      
+      const downloadURL = await getDownloadURL(storageRef);
+      return downloadURL;
+    } catch (error) {
+      console.error('Custom game upload error:', error);
+      throw error;
+    }
   };
 
   const pickImages = async () => {
@@ -474,13 +587,77 @@ const AdminScreen = ({ navigation }) => {
         gameData.winnerSlots = Number(winnerSlots) || 3;
         gameData.accuracyRadius = Number(accuracyRadius) || 10;
         gameData.cluePhotos = []; // Will be updated after upload
+
+        // Add mini-game challenge if configured
+        if (miniGameType && miniGameType !== 'none') {
+          gameData.miniGame = {
+            type: miniGameType === 'custom' ? 'custom' : miniGameType,
+            config: {},
+          };
+
+          switch (miniGameType) {
+            case 'tap_count':
+              gameData.miniGame.config = {
+                targetTaps: Number(miniGameTargetTaps) || 100,
+                timeLimit: Number(miniGameTimeLimit) || 30,
+              };
+              break;
+            case 'hold_duration':
+              gameData.miniGame.config = {
+                holdDuration: Number(miniGameHoldDuration) || 5000,
+              };
+              break;
+            case 'rhythm_tap':
+              gameData.miniGame.config = {
+                bpm: Number(miniGameBpm) || 120,
+                requiredBeats: Number(miniGameRequiredBeats) || 10,
+                toleranceMs: Number(miniGameToleranceMs) || 150,
+                requiredScore: 70,
+              };
+              break;
+            case 'custom':
+              // Custom game URL will be added after upload
+              break;
+          }
+        }
       }
 
       // Virtual game specific fields
       if (gameType === 'virtual') {
+        gameData.virtualGame = {
+          type: virtualGameType,
+          config: {},
+        };
+
+        switch (virtualGameType) {
+          case 'tap_count':
+            gameData.virtualGame.config = {
+              targetTaps: Number(virtualTargetTaps) || 100,
+              timeLimit: Number(virtualTimeLimit) || 30,
+            };
+            break;
+          case 'hold_duration':
+            gameData.virtualGame.config = {
+              holdDuration: Number(virtualHoldDuration) || 5000,
+            };
+            break;
+          case 'rhythm_tap':
+            gameData.virtualGame.config = {
+              bpm: Number(virtualBpm) || 120,
+              requiredBeats: Number(virtualRequiredBeats) || 10,
+              toleranceMs: Number(virtualToleranceMs) || 150,
+              requiredScore: 70,
+            };
+            break;
+          case 'custom':
+            // Custom game URL will be added after upload
+            break;
+        }
+        
+        // Legacy field for backwards compatibility
         gameData.virtualType = virtualGameType;
-        if (virtualGameType === 'tap') {
-          gameData.targetTaps = Number(targetTaps) || 1000;
+        if (virtualGameType === 'tap_count') {
+          gameData.targetTaps = Number(virtualTargetTaps) || 100;
         }
       }
 
@@ -509,6 +686,44 @@ const AdminScreen = ({ navigation }) => {
           setIsCreating(false);
           setUploadingPhotos(false);
           return;
+        }
+      }
+
+      // Upload custom mini-game HTML if provided (for location games)
+      if (gameType === 'location' && miniGameType === 'custom' && customMiniGameFile) {
+        try {
+          const customGameUrl = await uploadCustomGameToStorage(customMiniGameFile, gameRef.id);
+
+          // Update game document with custom game URL
+          await updateDoc(doc(db, 'games', gameRef.id), {
+            'miniGame.customGameUrl': customGameUrl,
+            updatedAt: serverTimestamp(),
+          });
+        } catch (customGameError) {
+          console.error('Custom game upload error:', customGameError);
+          Alert.alert(
+            'Warning',
+            'Game created but custom mini-game failed to upload. The default game type will be used.'
+          );
+        }
+      }
+
+      // Upload custom virtual game HTML if provided (for virtual games)
+      if (gameType === 'virtual' && virtualGameType === 'custom' && customVirtualGameFile) {
+        try {
+          const customGameUrl = await uploadCustomGameToStorage(customVirtualGameFile, gameRef.id);
+
+          // Update game document with custom game URL
+          await updateDoc(doc(db, 'games', gameRef.id), {
+            'virtualGame.customGameUrl': customGameUrl,
+            updatedAt: serverTimestamp(),
+          });
+        } catch (customGameError) {
+          console.error('Custom virtual game upload error:', customGameError);
+          Alert.alert(
+            'Warning',
+            'Game created but custom game failed to upload. The default Tap Race game will be used.'
+          );
         }
       }
 
@@ -1076,6 +1291,311 @@ const AdminScreen = ({ navigation }) => {
                 </Text>
               )}
             </GradientCard>
+
+            {/* Mini-Game Challenge Settings */}
+            <GradientCard style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                🎮 Arrival Challenge (Optional)
+              </Text>
+              <Text style={[styles.helpText, { color: theme.colors.textSecondary }]}>
+                Add a mini-game challenge that players must complete when they arrive at the location.
+                This can be updated without app store submissions!
+              </Text>
+
+              {/* Mini-Game Type Selector */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                  Challenge Type
+                </Text>
+                <View style={styles.miniGameTypeContainer}>
+                  {/* None Option */}
+                  <TouchableOpacity
+                    style={styles.miniGameTypeOption}
+                    onPress={() => setMiniGameType('none')}
+                    activeOpacity={0.7}
+                  >
+                    {miniGameType === 'none' ? (
+                      <LinearGradient
+                        colors={['#6B7280', '#4B5563']}
+                        style={styles.miniGameTypeCard}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Ionicons name="close-circle" size={28} color="#FFFFFF" />
+                        <Text style={styles.miniGameTypeText}>None</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                        <Ionicons name="close-circle-outline" size={28} color={theme.colors.textSecondary} />
+                        <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>None</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Tap Count Option */}
+                  <TouchableOpacity
+                    style={styles.miniGameTypeOption}
+                    onPress={() => setMiniGameType('tap_count')}
+                    activeOpacity={0.7}
+                  >
+                    {miniGameType === 'tap_count' ? (
+                      <LinearGradient
+                        colors={['#10B981', '#059669']}
+                        style={styles.miniGameTypeCard}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Ionicons name="finger-print" size={28} color="#FFFFFF" />
+                        <Text style={styles.miniGameTypeText}>Tap Race</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                        <Ionicons name="finger-print-outline" size={28} color={theme.colors.textSecondary} />
+                        <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>Tap Race</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Hold Duration Option */}
+                  <TouchableOpacity
+                    style={styles.miniGameTypeOption}
+                    onPress={() => setMiniGameType('hold_duration')}
+                    activeOpacity={0.7}
+                  >
+                    {miniGameType === 'hold_duration' ? (
+                      <LinearGradient
+                        colors={['#8B5CF6', '#6366F1']}
+                        style={styles.miniGameTypeCard}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Ionicons name="hand-left" size={28} color="#FFFFFF" />
+                        <Text style={styles.miniGameTypeText}>Hold</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                        <Ionicons name="hand-left-outline" size={28} color={theme.colors.textSecondary} />
+                        <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>Hold</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Rhythm Tap Option */}
+                  <TouchableOpacity
+                    style={styles.miniGameTypeOption}
+                    onPress={() => setMiniGameType('rhythm_tap')}
+                    activeOpacity={0.7}
+                  >
+                    {miniGameType === 'rhythm_tap' ? (
+                      <LinearGradient
+                        colors={['#EC4899', '#8B5CF6']}
+                        style={styles.miniGameTypeCard}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Ionicons name="musical-notes" size={28} color="#FFFFFF" />
+                        <Text style={styles.miniGameTypeText}>Rhythm</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                        <Ionicons name="musical-notes-outline" size={28} color={theme.colors.textSecondary} />
+                        <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>Rhythm</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Custom Upload Option */}
+                  <TouchableOpacity
+                    style={styles.miniGameTypeOption}
+                    onPress={() => setMiniGameType('custom')}
+                    activeOpacity={0.7}
+                  >
+                    {miniGameType === 'custom' ? (
+                      <LinearGradient
+                        colors={['#F59E0B', '#D97706']}
+                        style={styles.miniGameTypeCard}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Ionicons name="cloud-upload" size={28} color="#FFFFFF" />
+                        <Text style={styles.miniGameTypeText}>Custom</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                        <Ionicons name="cloud-upload-outline" size={28} color={theme.colors.textSecondary} />
+                        <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>Custom</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Tap Count Settings */}
+              {miniGameType === 'tap_count' && (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                      Target Taps
+                    </Text>
+                    <View style={styles.inputContainer}>
+                      <Ionicons name="finger-print" size={20} color={theme.colors.textSecondary} />
+                      <TextInput
+                        style={[styles.input, { color: theme.colors.text }]}
+                        placeholder="100"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={miniGameTargetTaps}
+                        onChangeText={setMiniGameTargetTaps}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                      Time Limit (seconds)
+                    </Text>
+                    <View style={styles.inputContainer}>
+                      <Ionicons name="timer" size={20} color={theme.colors.textSecondary} />
+                      <TextInput
+                        style={[styles.input, { color: theme.colors.text }]}
+                        placeholder="30"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={miniGameTimeLimit}
+                        onChangeText={setMiniGameTimeLimit}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                </>
+              )}
+
+              {/* Hold Duration Settings */}
+              {miniGameType === 'hold_duration' && (
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                    Hold Duration (milliseconds)
+                  </Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="time" size={20} color={theme.colors.textSecondary} />
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text }]}
+                      placeholder="5000"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={miniGameHoldDuration}
+                      onChangeText={setMiniGameHoldDuration}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <Text style={[styles.helpText, { color: theme.colors.textSecondary, marginTop: 4 }]}>
+                    5000ms = 5 seconds
+                  </Text>
+                </View>
+              )}
+
+              {/* Rhythm Tap Settings */}
+              {miniGameType === 'rhythm_tap' && (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                      BPM (Beats Per Minute)
+                    </Text>
+                    <View style={styles.inputContainer}>
+                      <Ionicons name="speedometer" size={20} color={theme.colors.textSecondary} />
+                      <TextInput
+                        style={[styles.input, { color: theme.colors.text }]}
+                        placeholder="120"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={miniGameBpm}
+                        onChangeText={setMiniGameBpm}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                      Required Beats
+                    </Text>
+                    <View style={styles.inputContainer}>
+                      <Ionicons name="musical-note" size={20} color={theme.colors.textSecondary} />
+                      <TextInput
+                        style={[styles.input, { color: theme.colors.text }]}
+                        placeholder="10"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={miniGameRequiredBeats}
+                        onChangeText={setMiniGameRequiredBeats}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                      Timing Tolerance (ms)
+                    </Text>
+                    <View style={styles.inputContainer}>
+                      <Ionicons name="pulse" size={20} color={theme.colors.textSecondary} />
+                      <TextInput
+                        style={[styles.input, { color: theme.colors.text }]}
+                        placeholder="150"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={miniGameToleranceMs}
+                        onChangeText={setMiniGameToleranceMs}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <Text style={[styles.helpText, { color: theme.colors.textSecondary, marginTop: 4 }]}>
+                      Lower = harder (150ms is moderate difficulty)
+                    </Text>
+                  </View>
+                </>
+              )}
+
+              {/* Custom Game Upload */}
+              {miniGameType === 'custom' && (
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                    Upload Custom HTML Game
+                  </Text>
+                  <Text style={[styles.helpText, { color: theme.colors.textSecondary, marginBottom: 12 }]}>
+                    Upload an HTML file with your custom game. The game should send a postMessage with 
+                    {' { type: "complete", success: true/false, data: {...} }'} when finished.
+                  </Text>
+                  
+                  <TouchableOpacity
+                    style={styles.customGameUploadButton}
+                    onPress={pickCustomGameFile}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={customMiniGameFile ? ['#10B981', '#059669'] : ['#F59E0B', '#D97706']}
+                      style={styles.customGameUploadGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                    >
+                      <Ionicons 
+                        name={customMiniGameFile ? 'checkmark-circle' : 'cloud-upload'} 
+                        size={24} 
+                        color="#FFFFFF" 
+                      />
+                      <Text style={styles.customGameUploadText}>
+                        {customMiniGameFile ? customMiniGameFileName : 'Select HTML File'}
+                      </Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  {customMiniGameFile && (
+                    <TouchableOpacity
+                      style={styles.removeCustomGameButton}
+                      onPress={() => {
+                        setCustomMiniGameFile(null);
+                        setCustomMiniGameFileName('');
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                      <Text style={styles.removeCustomGameText}>Remove file</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </GradientCard>
           </>
         )}
 
@@ -1085,60 +1605,276 @@ const AdminScreen = ({ navigation }) => {
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
               🎯 Virtual Game Settings
             </Text>
+            <Text style={[styles.helpText, { color: theme.colors.textSecondary, marginBottom: 16 }]}>
+              Choose the game players will play. You can use a preset or upload your own custom HTML game.
+            </Text>
+
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
                 Game Type
               </Text>
-              <View style={styles.virtualTypeContainer}>
+              <View style={styles.miniGameTypeContainer}>
+                {/* Tap Race Option */}
                 <TouchableOpacity
-                  style={styles.virtualTypeOption}
-                  onPress={() => setVirtualGameType('tap')}
+                  style={styles.miniGameTypeOption}
+                  onPress={() => setVirtualGameType('tap_count')}
                   activeOpacity={0.7}
                 >
-                  {virtualGameType === 'tap' ? (
+                  {virtualGameType === 'tap_count' ? (
                     <LinearGradient
-                      colors={theme.gradients.accent}
-                      style={styles.virtualTypeCard}
+                      colors={['#10B981', '#059669']}
+                      style={styles.miniGameTypeCard}
                       start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
+                      end={{ x: 1, y: 1 }}
                     >
-                      <Ionicons name="hand-left" size={24} color="#FFFFFF" />
-                      <Text style={styles.virtualTypeText}>Tap Race</Text>
+                      <Ionicons name="hand-left" size={28} color="#FFFFFF" />
+                      <Text style={styles.miniGameTypeText}>Tap Race</Text>
                     </LinearGradient>
                   ) : (
-                    <View style={[styles.virtualTypeCard, styles.inactiveCard]}>
-                      <Ionicons
-                        name="hand-left-outline"
-                        size={24}
-                        color={theme.colors.textSecondary}
-                      />
-                      <Text
-                        style={[styles.virtualTypeText, { color: theme.colors.textSecondary }]}
-                      >
-                        Tap Race
-                      </Text>
+                    <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                      <Ionicons name="hand-left-outline" size={28} color={theme.colors.textSecondary} />
+                      <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>Tap Race</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Hold Option */}
+                <TouchableOpacity
+                  style={styles.miniGameTypeOption}
+                  onPress={() => setVirtualGameType('hold_duration')}
+                  activeOpacity={0.7}
+                >
+                  {virtualGameType === 'hold_duration' ? (
+                    <LinearGradient
+                      colors={['#8B5CF6', '#6366F1']}
+                      style={styles.miniGameTypeCard}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Ionicons name="finger-print" size={28} color="#FFFFFF" />
+                      <Text style={styles.miniGameTypeText}>Hold</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                      <Ionicons name="finger-print-outline" size={28} color={theme.colors.textSecondary} />
+                      <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>Hold</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Rhythm Tap Option */}
+                <TouchableOpacity
+                  style={styles.miniGameTypeOption}
+                  onPress={() => setVirtualGameType('rhythm_tap')}
+                  activeOpacity={0.7}
+                >
+                  {virtualGameType === 'rhythm_tap' ? (
+                    <LinearGradient
+                      colors={['#EC4899', '#8B5CF6']}
+                      style={styles.miniGameTypeCard}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Ionicons name="musical-notes" size={28} color="#FFFFFF" />
+                      <Text style={styles.miniGameTypeText}>Rhythm</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                      <Ionicons name="musical-notes-outline" size={28} color={theme.colors.textSecondary} />
+                      <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>Rhythm</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Custom Upload Option */}
+                <TouchableOpacity
+                  style={styles.miniGameTypeOption}
+                  onPress={() => setVirtualGameType('custom')}
+                  activeOpacity={0.7}
+                >
+                  {virtualGameType === 'custom' ? (
+                    <LinearGradient
+                      colors={['#F59E0B', '#D97706']}
+                      style={styles.miniGameTypeCard}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Ionicons name="cloud-upload" size={28} color="#FFFFFF" />
+                      <Text style={styles.miniGameTypeText}>Custom</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                      <Ionicons name="cloud-upload-outline" size={28} color={theme.colors.textSecondary} />
+                      <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>Custom</Text>
                     </View>
                   )}
                 </TouchableOpacity>
               </View>
             </View>
 
-            {virtualGameType === 'tap' && (
+            {/* Tap Count Settings */}
+            {virtualGameType === 'tap_count' && (
+              <>
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                    Target Taps
+                  </Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="hand-left" size={20} color={theme.colors.textSecondary} />
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text }]}
+                      placeholder="100"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={virtualTargetTaps}
+                      onChangeText={setVirtualTargetTaps}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                    Time Limit (seconds)
+                  </Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="timer" size={20} color={theme.colors.textSecondary} />
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text }]}
+                      placeholder="30"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={virtualTimeLimit}
+                      onChangeText={setVirtualTimeLimit}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+              </>
+            )}
+
+            {/* Hold Duration Settings */}
+            {virtualGameType === 'hold_duration' && (
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  Target Taps
+                  Hold Duration (milliseconds)
                 </Text>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="finger-print" size={20} color={theme.colors.textSecondary} />
+                  <Ionicons name="time" size={20} color={theme.colors.textSecondary} />
                   <TextInput
                     style={[styles.input, { color: theme.colors.text }]}
-                    placeholder="1000"
+                    placeholder="5000"
                     placeholderTextColor={theme.colors.textSecondary}
-                    value={targetTaps}
-                    onChangeText={setTargetTaps}
+                    value={virtualHoldDuration}
+                    onChangeText={setVirtualHoldDuration}
                     keyboardType="numeric"
                   />
                 </View>
+                <Text style={[styles.helpText, { color: theme.colors.textSecondary, marginTop: 4 }]}>
+                  5000ms = 5 seconds
+                </Text>
+              </View>
+            )}
+
+            {/* Rhythm Tap Settings */}
+            {virtualGameType === 'rhythm_tap' && (
+              <>
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                    BPM (Beats Per Minute)
+                  </Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="speedometer" size={20} color={theme.colors.textSecondary} />
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text }]}
+                      placeholder="120"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={virtualBpm}
+                      onChangeText={setVirtualBpm}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                    Required Beats
+                  </Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="musical-note" size={20} color={theme.colors.textSecondary} />
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text }]}
+                      placeholder="10"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={virtualRequiredBeats}
+                      onChangeText={setVirtualRequiredBeats}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                    Timing Tolerance (ms)
+                  </Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="pulse" size={20} color={theme.colors.textSecondary} />
+                    <TextInput
+                      style={[styles.input, { color: theme.colors.text }]}
+                      placeholder="150"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={virtualToleranceMs}
+                      onChangeText={setVirtualToleranceMs}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <Text style={[styles.helpText, { color: theme.colors.textSecondary, marginTop: 4 }]}>
+                    Lower = harder (150ms is moderate difficulty)
+                  </Text>
+                </View>
+              </>
+            )}
+
+            {/* Custom Game Upload */}
+            {virtualGameType === 'custom' && (
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                  Upload Custom HTML Game
+                </Text>
+                <Text style={[styles.helpText, { color: theme.colors.textSecondary, marginBottom: 12 }]}>
+                  Upload an HTML file with your custom game. The game should send a postMessage with 
+                  {' { type: "complete", success: true/false, data: {...} }'} when finished.
+                </Text>
+                
+                <TouchableOpacity
+                  style={styles.customGameUploadButton}
+                  onPress={pickCustomGameFile}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={customVirtualGameFile ? ['#10B981', '#059669'] : ['#F59E0B', '#D97706']}
+                    style={styles.customGameUploadGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    <Ionicons 
+                      name={customVirtualGameFile ? 'checkmark-circle' : 'cloud-upload'} 
+                      size={24} 
+                      color="#FFFFFF" 
+                    />
+                    <Text style={styles.customGameUploadText}>
+                      {customVirtualGameFile ? customVirtualGameFileName : 'Select HTML File'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {customVirtualGameFile && (
+                  <TouchableOpacity
+                    style={styles.removeCustomGameButton}
+                    onPress={() => {
+                      setCustomVirtualGameFile(null);
+                      setCustomVirtualGameFileName('');
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                    <Text style={styles.removeCustomGameText}>Remove file</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </GradientCard>
@@ -1624,6 +2360,60 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     marginLeft: 8,
+  },
+  miniGameTypeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  miniGameTypeOption: {
+    width: '25%',
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  miniGameTypeCard: {
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 80,
+  },
+  miniGameTypeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  customGameUploadButton: {
+    marginTop: 8,
+  },
+  customGameUploadGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 10,
+  },
+  customGameUploadText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  removeCustomGameButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    padding: 8,
+    gap: 6,
+  },
+  removeCustomGameText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '600',
   },
   difficultyContainer: {
     flexDirection: 'row',

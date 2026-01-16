@@ -98,10 +98,10 @@ const CommunityScreen = () => {
       return;
     }
 
+    // Query for all live games (both location and virtual)
     const gamesQuery = query(
       collection(db, 'games'),
-      where('status', '==', 'live'),
-      where('type', '==', 'location')
+      where('status', '==', 'live')
     );
 
     const unsubscribe = onSnapshot(
@@ -613,12 +613,42 @@ const CommunityScreen = () => {
                         <GradientCard style={styles.gameCard}>
                           <View style={styles.gameCardHeader}>
                             <View style={styles.gameCardLeft}>
-                              <Text style={[styles.gameCardTitle, { color: theme.colors.text }]}>
-                                {game.name}
-                              </Text>
-                              <Text style={[styles.gameCardLocation, { color: theme.colors.textSecondary }]}>
-                                📍 {game.city}
-                              </Text>
+                              <View style={styles.gameCardTitleRow}>
+                                <Text style={[styles.gameCardTitle, { color: theme.colors.text }]}>
+                                  {game.name}
+                                </Text>
+                                {/* Game Type Badge */}
+                                {game.type === 'virtual' ? (
+                                  <LinearGradient
+                                    colors={['#8B5CF6', '#6366F1']}
+                                    style={styles.gameTypeBadge}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                  >
+                                    <Ionicons name="game-controller" size={12} color="#FFFFFF" />
+                                    <Text style={styles.gameTypeBadgeText}>VIRTUAL</Text>
+                                  </LinearGradient>
+                                ) : (
+                                  <LinearGradient
+                                    colors={['#10B981', '#059669']}
+                                    style={styles.gameTypeBadge}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                  >
+                                    <Ionicons name="location" size={12} color="#FFFFFF" />
+                                    <Text style={styles.gameTypeBadgeText}>LOCATION</Text>
+                                  </LinearGradient>
+                                )}
+                              </View>
+                              {game.type === 'virtual' ? (
+                                <Text style={[styles.gameCardLocation, { color: theme.colors.textSecondary }]}>
+                                  🎮 Play from anywhere
+                                </Text>
+                              ) : (
+                                <Text style={[styles.gameCardLocation, { color: theme.colors.textSecondary }]}>
+                                  📍 {game.city}
+                                </Text>
+                              )}
                             </View>
                             <View style={styles.gameCardRight}>
                               <LinearGradient
@@ -645,7 +675,7 @@ const CommunityScreen = () => {
                               </Text>
                             </View>
                             <View style={styles.tapToJoinButton}>
-                              <Text style={styles.tapToJoinText}>Tap to Join</Text>
+                              <Text style={styles.tapToJoinText}>{game.type === 'virtual' ? 'Play Now' : 'Tap to Join'}</Text>
                               <Ionicons name="chevron-forward" size={18} color="#00D4E5" />
                             </View>
                           </View>
@@ -662,14 +692,14 @@ const CommunityScreen = () => {
                       ref={mapRef}
                       style={styles.map}
                       region={{
-                        latitude: liveGames.length > 0 ? liveGames[0].location.latitude : 37.7749,
-                        longitude: liveGames.length > 0 ? liveGames[0].location.longitude : -122.4194,
+                        latitude: liveGames.find(g => g.type === 'location' && g.location)?.location?.latitude || 37.7749,
+                        longitude: liveGames.find(g => g.type === 'location' && g.location)?.location?.longitude || -122.4194,
                         latitudeDelta: 0.0922,
                         longitudeDelta: 0.0421,
                       }}
                     >
-                      {/* Live Games Markers */}
-                      {liveGames.map((game) => (
+                      {/* Live Games Markers - only show location-based games on map */}
+                      {liveGames.filter(game => game.type === 'location' && game.location).map((game) => (
                         <UnifiedMarker
                           key={game.id}
                           coordinate={{
@@ -1319,7 +1349,27 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  gameCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 4,
+  },
+  gameTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  gameTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   gameCardLocation: {
     fontSize: 14,

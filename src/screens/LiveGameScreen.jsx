@@ -45,6 +45,7 @@ if (Platform.OS !== 'web') {
 }
 
 import { getFirebaseAuth, getFirebaseDb } from '../config/firebase';
+import MiniGameWebView from '../components/MiniGameWebView';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CAROUSEL_HEIGHT = 400;
@@ -86,6 +87,12 @@ export default function LiveGameScreen({ route, navigation }) {
   const toastAnim = useRef(new Animated.Value(0)).current;
   const toastTimeoutRef = useRef(null);
   const [toastMessage, setToastMessage] = useState('');
+
+  // Mini-game state
+  const [showMiniGame, setShowMiniGame] = useState(false);
+  const [miniGameTriggered, setMiniGameTriggered] = useState(false);
+  const [miniGameCompleted, setMiniGameCompleted] = useState(false);
+  const [hasAutoOpened, setHasAutoOpened] = useState(false); // Tracks if auto-open has happened (prevents re-opening after close)
 
   // Exit game screen
   const handleExit = () => {
@@ -508,7 +515,26 @@ export default function LiveGameScreen({ route, navigation }) {
       game.location.longitude
     );
     setBearing(bearingDegrees);
-  }, [userLocation, game]);
+
+    // Auto-trigger mini-game when user arrives at location (only once)
+    const accuracyRadius = Number(game?.accuracyRadius) || 10;
+    const hasMiniGame = game?.miniGame?.type;
+    const isWithinRadius = dist <= accuracyRadius;
+    // Use hasAutoOpened to prevent re-triggering after user closes the mini-game
+    const canTrigger = hasMiniGame && isWithinRadius && !hasAutoOpened && !miniGameCompleted && !isWinner && game.status === 'live';
+
+    if (canTrigger) {
+      console.log('🎮 User arrived at location! Auto-triggering mini-game (once):', game.miniGame.type);
+      setHasAutoOpened(true); // Prevents auto-opening again after close
+      setMiniGameTriggered(true);
+      setShowMiniGame(true);
+
+      // Haptic feedback
+      if (Platform.OS !== 'web' && Haptics) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    }
+  }, [userLocation, game, hasAutoOpened, miniGameCompleted, isWinner]);
 
   // Subscribe to device magnetometer for real-time compass orientation
   useEffect(() => {
@@ -610,12 +636,221 @@ export default function LiveGameScreen({ route, navigation }) {
     setCurrentPhotoIndex(index);
   };
 
+  // Check if this is a virtual game
+  const isVirtualGame = game?.type === 'virtual';
+
+  // Get the game config source (miniGame for location games, virtualGame for virtual games)
+  const getGameSource = () => {
+    if (isVirtualGame) {
+      return game?.virtualGame;
+    }
+    return game?.miniGame;
+  };
+
+  // Get mini-game URL - returns custom URL if uploaded, otherwise null (will use embedded preset)
+  const getMiniGameUrl = () => {
+    const source = getGameSource();
+    // If admin uploaded a custom HTML game, use that URL
+    if (source?.customGameUrl) {
+      return source.customGameUrl;
+    }
+    // Otherwise return null - the MiniGameWebView will use embedded presets
+    return null;
+  };
+
+  // Get mini-game config from game data
+  const getMiniGameConfig = () => {
+    const source = getGameSource();
+    
+    // Handle legacy virtual games that don't have virtualGame object
+    if (isVirtualGame && !source) {
+      // Use legacy targetTaps field if available
+      return {
+        targetTaps: game?.targetTaps || 100,
+        timeLimit: 30,
+      };
+    }
+    
+    if (!source) return {};
+
+    const { type, config } = source;
+
+    switch (type) {
+      case 'tap_count':
+        return {
+          targetTaps: config?.targetTaps || 100,
+          timeLimit: config?.timeLimit || 30,
+        };
+      case 'hold_duration':
+        return {
+          holdDuration: config?.holdDuration || 5000,
+        };
+      case 'rhythm_tap':
+        return {
+          bpm: config?.bpm || 120,
+          requiredBeats: config?.requiredBeats || 10,
+          toleranceMs: config?.toleranceMs || 150,
+          requiredScore: config?.requiredScore || 70,
+        };
+      case 'custom':
+        // Custom games receive all config as-is
+        return config || {};
+      default:
+        return {};
+    }
+  };
+
+  // Get the actual game type to use (for custom games, fall back to tap_count if no URL)
+  const getEffectiveGameType = () => {
+    const source = getGameSource();
+    
+    // Handle legacy virtual games that don't have virtualGame object
+    if (isVirtualGame && !source) {
+      // Check for legacy virtualType field
+      if (game?.virtualType === 'tap') return 'tap_count';
+      return 'tap_count'; // Default for virtual games
+    }
+    
+    if (!source) return 'tap_count';
+
+    const { type, customGameUrl } = source;
+
+    // If it's a custom type but no URL was uploaded, fall back to tap_count
+    if (type === 'custom' && !customGameUrl) {
+      return 'tap_count';
+    }
+
+    return type;
+  };
+
+  // Check if game has a mini-game configured (either location mini-game or virtual game)
+  const hasGameChallenge = () => {
+    if (isVirtualGame) {
+      // Virtual games always have a challenge - use virtualGame.type if available, 
+      // otherwise fall back to virtualType (legacy) or default to tap_count
+      return !!(game?.virtualGame?.type || game?.virtualType || true);
+    }
+    return !!game?.miniGame?.type;
+  };
+
+  // Handle mini-game completion
+  const handleMiniGameComplete = async (success, data) => {
+    console.log('🎮 Mini-game result:', { success, data });
+    setShowMiniGame(false);
+    setMiniGameCompleted(true);
+
+    if (success) {
+      // User won the mini-game, now record them as a winner
+      await recordWinner(data);
+    } else {
+      // User failed the mini-game
+      showToast('Challenge failed! Try again when you return to the location.');
+      // Reset so they can try again if they leave and come back
+      setTimeout(() => {
+        setMiniGameTriggered(false);
+        setMiniGameCompleted(false);
+      }, 3000);
+    }
+  };
+
+  // Handle mini-game close (user cancelled)
+  const handleMiniGameClose = () => {
+    setShowMiniGame(false);
+    showToast('Challenge cancelled. Tap "Enter Game" to try again.');
+    // Note: We do NOT reset hasAutoOpened here, so the game won't auto-open again
+  };
+
+  // Record winner in Firebase (extracted from handleSubmitAttempt)
+  const recordWinner = async (miniGameData = null) => {
+    if (!game || !currentUser || !userLocation) return;
+
+    try {
+      const db = getFirebaseDb();
+      const gameRef = doc(db, 'games', gameId);
+      const userRef = doc(db, 'users', currentUser.uid);
+
+      const currentTime = Timestamp.now();
+      const distanceMeters = typeof distance === 'number' && Number.isFinite(distance) ? distance : 0;
+
+      const attempt = {
+        userId: currentUser.uid,
+        attemptedAt: currentTime,
+        distance: distanceMeters,
+        location: {
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+        },
+        miniGameResult: miniGameData,
+      };
+
+      let didWin = false;
+      let wasAlreadyWinner = false;
+
+      await runTransaction(db, async (transaction) => {
+        const gameSnap = await transaction.get(gameRef);
+        if (!gameSnap.exists()) throw new Error('Game not found');
+
+        const gameData = gameSnap.data();
+        const winners = Array.isArray(gameData?.winners) ? gameData.winners : [];
+        const winnerSlots = Number(gameData?.winnerSlots) || 3;
+
+        wasAlreadyWinner = winners.some((w) => w?.userId === currentUser.uid);
+        const canWin = !wasAlreadyWinner && winners.length < winnerSlots;
+
+        const gameUpdate = {
+          attempts: arrayUnion(attempt),
+          updatedAt: serverTimestamp(),
+        };
+
+        if (canWin) {
+          const winner = {
+            userId: currentUser.uid,
+            position: winners.length + 1,
+            completedAt: currentTime,
+            distance: distanceMeters,
+            miniGameResult: miniGameData,
+          };
+
+          gameUpdate.winners = arrayUnion(winner);
+
+          const prizeAmount = Number(gameData?.prizeAmount) || 0;
+          transaction.set(
+            userRef,
+            {
+              balance: increment(prizeAmount),
+              earnings: increment(prizeAmount),
+              wins: increment(1),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+
+          didWin = true;
+        }
+
+        transaction.update(gameRef, gameUpdate);
+      });
+
+      if (didWin) {
+        setIsWinner(true);
+        triggerCelebration();
+        console.log('🎉 User won the game!');
+      } else if (wasAlreadyWinner) {
+        setIsWinner(true);
+        console.log('🏆 Winner already recorded for this user');
+      }
+    } catch (error) {
+      console.error('❌ Error recording winner:', error);
+      showToast('Error recording your win. Please try again.');
+    }
+  };
+
   // Submit attempt to reach location
   const handleSubmitAttempt = async () => {
     if (!game || !currentUser || !userLocation) return;
 
     try {
-      if (Platform.OS !== 'web') {
+      if (Platform.OS !== 'web' && Haptics) {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
 
@@ -634,6 +869,16 @@ export default function LiveGameScreen({ route, navigation }) {
         return;
       }
 
+      // Check if game has a mini-game challenge
+      if (game?.miniGame?.type && !miniGameCompleted) {
+        // Trigger mini-game instead of immediate win
+        console.log('🎮 Triggering mini-game challenge:', game.miniGame.type);
+        setMiniGameTriggered(true);
+        setShowMiniGame(true);
+        return;
+      }
+
+      // No mini-game, proceed with normal win flow
       const db = getFirebaseDb();
       const gameRef = doc(db, 'games', gameId);
       const userRef = doc(db, 'users', currentUser.uid);
@@ -702,6 +947,7 @@ export default function LiveGameScreen({ route, navigation }) {
 
       if (didWin) {
         setIsWinner(true);
+        triggerCelebration();
         console.log('🎉 User won the game!');
       } else if (wasAlreadyWinner) {
         setIsWinner(true);
@@ -851,18 +1097,74 @@ export default function LiveGameScreen({ route, navigation }) {
           >
             <Text style={styles.gameTitle}>{game.name}</Text>
             <Text style={styles.prizeAmount}>${game.prizeAmount} Prize</Text>
+            {/* Virtual Game Badge */}
+            {isVirtualGame && (
+              <View style={styles.virtualGameBadge}>
+                <Ionicons name="game-controller" size={16} color="#8B5CF6" />
+                <Text style={styles.virtualGameBadgeText}>Virtual Game</Text>
+              </View>
+            )}
           </Animated.View>
 
-          {/* Distance Display */}
-          {distance !== null && (
+          {/* Location Game: Distance Display */}
+          {!isVirtualGame && distance !== null && (
             <View style={styles.distanceContainer}>
               <Ionicons name="location" size={32} color="#1A1A2E" />
               <Text style={styles.distanceText}>{formatDistanceAway(distance)}</Text>
             </View>
           )}
 
-          {/* Odds Meter */}
-          {oddsPercent > 0 && (
+          {/* Virtual Game: Play Now Section */}
+          {isVirtualGame && !isWinner && game.status === 'live' && (
+            <View style={styles.virtualGamePrompt}>
+              <Ionicons name="game-controller" size={48} color="#8B5CF6" />
+              <Text style={styles.virtualGamePromptText}>
+                {miniGameCompleted ? 'Game completed!' : 'Ready to play?'}
+              </Text>
+              <Text style={styles.virtualGamePromptSubtext}>
+                {miniGameCompleted 
+                  ? 'You can try again below' 
+                  : 'Tap the button below to start the challenge!'}
+              </Text>
+              
+              {/* Enter Game Button */}
+              {!showMiniGame && (
+                <TouchableOpacity
+                  style={styles.playNowButton}
+                  onPress={() => {
+                    console.log('🎮 Enter Game button pressed!');
+                    console.log('🎮 hasGameChallenge:', hasGameChallenge());
+                    console.log('🎮 getEffectiveGameType:', getEffectiveGameType());
+                    console.log('🎮 getMiniGameConfig:', getMiniGameConfig());
+                    if (miniGameCompleted) {
+                      setMiniGameCompleted(false);
+                    }
+                    setMiniGameTriggered(true);
+                    setShowMiniGame(true);
+                    if (Platform.OS !== 'web' && Haptics) {
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={['#8B5CF6', '#6366F1']}
+                    style={styles.playNowButtonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Ionicons name={miniGameCompleted ? 'refresh' : 'game-controller'} size={24} color="#FFFFFF" />
+                    <Text style={styles.playNowButtonText}>
+                      {miniGameCompleted ? 'Play Again' : 'Enter Game'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* Location Game: Odds Meter */}
+          {!isVirtualGame && oddsPercent > 0 && (
             <View style={styles.oddsContainer}>
               <View style={styles.oddsBar}>
                 <View style={[styles.oddsBarFill, { width: `${oddsPercent}%` }]} />
@@ -885,8 +1187,8 @@ export default function LiveGameScreen({ route, navigation }) {
             </TouchableOpacity>
           )}
 
-          {/* Submit Attempt Button */}
-          {game.status === 'live' && !isWinner && (
+          {/* Location Game: Submit Attempt Button */}
+          {!isVirtualGame && game.status === 'live' && !isWinner && (
             <TouchableOpacity
               style={[
                 styles.submitButton,
@@ -904,12 +1206,11 @@ export default function LiveGameScreen({ route, navigation }) {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <Text style={styles.submitButtonText}>
-                  {distance <= (game.accuracyRadius || 10) ? '🎯 Claim Your Spot!' : '📍 Submit Attempt'}
-                </Text>
+                <Text style={styles.submitButtonText}>🎮 Enter Game</Text>
               </LinearGradient>
             </TouchableOpacity>
           )}
+
 
           {/* Winners Count */}
           <Text style={styles.winnersCount}>
@@ -1035,6 +1336,18 @@ export default function LiveGameScreen({ route, navigation }) {
           </View>
         </Animated.View>
       ) : null}
+
+      {/* Mini-Game WebView Modal - works for both location mini-games and virtual games */}
+      {hasGameChallenge() && (
+        <MiniGameWebView
+          visible={showMiniGame}
+          gameUrl={getMiniGameUrl()}
+          gameType={getEffectiveGameType()}
+          gameConfig={getMiniGameConfig()}
+          onComplete={handleMiniGameComplete}
+          onClose={handleMiniGameClose}
+        />
+      )}
     </LinearGradient>
   );
 }
@@ -1220,6 +1533,60 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1A1A2E',
+  },
+  virtualGameBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginTop: 8,
+    gap: 6,
+  },
+  virtualGameBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#8B5CF6',
+  },
+  virtualGamePrompt: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+  },
+  virtualGamePromptText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  virtualGamePromptSubtext: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  playNowButton: {
+    marginTop: 24,
+    width: '100%',
+    maxWidth: 280,
+  },
+  playNowButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    borderRadius: 16,
+    gap: 12,
+  },
+  playNowButtonText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   leaderboardContainer: {
     flex: 1,

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hold Challenge</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .title {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 32px;
+      text-align: center;
+    }
+
+    .hold-container {
+      position: relative;
+      width: 220px;
+      height: 220px;
+      margin-bottom: 32px;
+    }
+
+    .progress-ring {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .progress-ring-bg {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.1);
+      stroke-width: 12;
+    }
+
+    .progress-ring-fill {
+      fill: none;
+      stroke: url(#gradient);
+      stroke-width: 12;
+      stroke-linecap: round;
+      stroke-dasharray: 628;
+      stroke-dashoffset: 628;
+      transition: stroke-dashoffset 0.1s linear;
+    }
+
+    .hold-button {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      color: white;
+      box-shadow: 0 10px 40px rgba(139, 92, 246, 0.4);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .hold-button:active,
+    .hold-button.holding {
+      transform: translate(-50%, -50%) scale(0.95);
+      box-shadow: 0 5px 20px rgba(139, 92, 246, 0.3);
+      background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%);
+    }
+
+    .hold-button.disabled {
+      background: linear-gradient(135deg, #6B7280 0%, #4B5563 100%);
+      box-shadow: 0 10px 40px rgba(107, 114, 128, 0.3);
+      pointer-events: none;
+    }
+
+    .hold-button .icon {
+      font-size: 48px;
+      margin-bottom: 4px;
+    }
+
+    .hold-button .label {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .timer-display {
+      font-size: 48px;
+      font-weight: 800;
+      color: #8B5CF6;
+      margin-bottom: 8px;
+    }
+
+    .timer-label {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .instruction {
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.8);
+      text-align: center;
+      margin-top: 24px;
+      min-height: 24px;
+    }
+
+    .instruction.warning {
+      color: #F59E0B;
+    }
+
+    .result-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .result-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .result-icon {
+      font-size: 80px;
+      margin-bottom: 24px;
+    }
+
+    .result-title {
+      font-size: 32px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .result-subtitle {
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .result-overlay.success .result-title {
+      color: #10B981;
+    }
+
+    .result-overlay.failure .result-title {
+      color: #EF4444;
+    }
+
+    .countdown-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .countdown-number {
+      font-size: 120px;
+      font-weight: 800;
+      color: #8B5CF6;
+      animation: countdownPulse 1s ease-in-out;
+    }
+
+    @keyframes countdownPulse {
+      0% { transform: scale(0.5); opacity: 0; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(0.95); }
+      50% { transform: translate(-50%, -50%) scale(0.92); }
+    }
+
+    .hold-button.holding {
+      animation: pulse 0.5s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="countdown-overlay" id="countdownOverlay">
+    <div class="countdown-number" id="countdownNumber">3</div>
+  </div>
+
+  <div class="container" id="gameContainer">
+    <h1 class="title">Hold Challenge!</h1>
+    <p class="subtitle">Hold the button for <span id="targetDisplay">5</span> seconds</p>
+
+    <div class="hold-container">
+      <svg class="progress-ring" viewBox="0 0 220 220">
+        <defs>
+          <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#10B981" />
+            <stop offset="100%" style="stop-color:#059669" />
+          </linearGradient>
+        </defs>
+        <circle class="progress-ring-bg" cx="110" cy="110" r="100" />
+        <circle class="progress-ring-fill" id="progressRing" cx="110" cy="110" r="100" />
+      </svg>
+
+      <button class="hold-button" id="holdButton">
+        <span class="icon">👇</span>
+        <span class="label">Hold</span>
+      </button>
+    </div>
+
+    <div class="timer-display" id="timerDisplay">0.0s</div>
+    <div class="timer-label">Time Held</div>
+
+    <div class="instruction" id="instruction">Press and hold the button!</div>
+  </div>
+
+  <div class="result-overlay" id="resultOverlay">
+    <div class="result-icon" id="resultIcon">🎉</div>
+    <div class="result-title" id="resultTitle">You Won!</div>
+    <div class="result-subtitle" id="resultSubtitle">Great job!</div>
+  </div>
+
+  <script>
+    // Get config from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const holdDuration = parseInt(urlParams.get('holdDuration')) || 5000; // milliseconds
+    const holdDurationSeconds = holdDuration / 1000;
+
+    // Game state
+    let isHolding = false;
+    let holdStartTime = null;
+    let currentHoldTime = 0;
+    let animationFrame = null;
+    let gameStarted = false;
+    let gameEnded = false;
+
+    // DOM elements
+    const holdButton = document.getElementById('holdButton');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const progressRing = document.getElementById('progressRing');
+    const targetDisplay = document.getElementById('targetDisplay');
+    const instruction = document.getElementById('instruction');
+    const resultOverlay = document.getElementById('resultOverlay');
+    const resultIcon = document.getElementById('resultIcon');
+    const resultTitle = document.getElementById('resultTitle');
+    const resultSubtitle = document.getElementById('resultSubtitle');
+    const countdownOverlay = document.getElementById('countdownOverlay');
+    const countdownNumber = document.getElementById('countdownNumber');
+
+    // Constants
+    const CIRCUMFERENCE = 2 * Math.PI * 100; // 628
+
+    // Initialize display
+    targetDisplay.textContent = holdDurationSeconds;
+
+    // Countdown before game starts
+    function startCountdown() {
+      let count = 3;
+      countdownNumber.textContent = count;
+
+      const countdownInterval = setInterval(() => {
+        count--;
+        if (count > 0) {
+          countdownNumber.textContent = count;
+          countdownNumber.style.animation = 'none';
+          countdownNumber.offsetHeight; // Trigger reflow
+          countdownNumber.style.animation = 'countdownPulse 1s ease-in-out';
+        } else if (count === 0) {
+          countdownNumber.textContent = 'GO!';
+          countdownNumber.style.color = '#8B5CF6';
+        } else {
+          clearInterval(countdownInterval);
+          countdownOverlay.classList.add('hidden');
+          gameStarted = true;
+        }
+      }, 1000);
+    }
+
+    // Update progress ring
+    function updateProgress(progress) {
+      const offset = CIRCUMFERENCE - (progress * CIRCUMFERENCE);
+      progressRing.style.strokeDashoffset = offset;
+    }
+
+    // Animation loop while holding
+    function updateHoldTime() {
+      if (!isHolding || gameEnded) return;
+
+      currentHoldTime = Date.now() - holdStartTime;
+      const seconds = currentHoldTime / 1000;
+      const progress = Math.min(currentHoldTime / holdDuration, 1);
+
+      timerDisplay.textContent = seconds.toFixed(1) + 's';
+      updateProgress(progress);
+
+      // Update instruction based on progress
+      if (progress >= 0.8) {
+        instruction.textContent = 'Almost there! Keep holding!';
+        instruction.classList.add('warning');
+      } else if (progress >= 0.5) {
+        instruction.textContent = 'Halfway there!';
+        instruction.classList.remove('warning');
+      }
+
+      // Check win condition
+      if (currentHoldTime >= holdDuration) {
+        endGame(true);
+        return;
+      }
+
+      animationFrame = requestAnimationFrame(updateHoldTime);
+    }
+
+    // Start holding
+    function startHold(e) {
+      e.preventDefault();
+      
+      if (!gameStarted || gameEnded || isHolding) return;
+
+      isHolding = true;
+      holdStartTime = Date.now();
+      holdButton.classList.add('holding');
+      instruction.textContent = 'Keep holding...';
+      instruction.classList.remove('warning');
+
+      // Haptic feedback
+      if (navigator.vibrate) {
+        navigator.vibrate(20);
+      }
+
+      updateHoldTime();
+    }
+
+    // Stop holding
+    function stopHold(e) {
+      e.preventDefault();
+      
+      if (!isHolding || gameEnded) return;
+
+      isHolding = false;
+      holdButton.classList.remove('holding');
+      cancelAnimationFrame(animationFrame);
+
+      // Check if they released too early
+      if (currentHoldTime < holdDuration) {
+        // Reset progress
+        currentHoldTime = 0;
+        timerDisplay.textContent = '0.0s';
+        updateProgress(0);
+        instruction.textContent = 'Released too early! Try again!';
+        instruction.classList.add('warning');
+
+        // Haptic feedback
+        if (navigator.vibrate) {
+          navigator.vibrate([50, 50, 50]);
+        }
+      }
+    }
+
+    // End the game
+    function endGame(success) {
+      if (gameEnded) return;
+      gameEnded = true;
+
+      isHolding = false;
+      holdButton.classList.remove('holding');
+      holdButton.classList.add('disabled');
+      cancelAnimationFrame(animationFrame);
+
+      if (success) {
+        resultOverlay.classList.add('success');
+        resultIcon.textContent = '🎉';
+        resultTitle.textContent = 'You Won!';
+        resultSubtitle.textContent = `Held for ${(currentHoldTime / 1000).toFixed(1)} seconds!`;
+
+        // Haptic feedback
+        if (navigator.vibrate) {
+          navigator.vibrate([100, 50, 100, 50, 100]);
+        }
+      } else {
+        resultOverlay.classList.add('failure');
+        resultIcon.textContent = '😔';
+        resultTitle.textContent = 'Failed!';
+        resultSubtitle.textContent = 'You released too early';
+      }
+
+      resultOverlay.classList.add('show');
+
+      // Send result to parent
+      const result = {
+        type: 'complete',
+        success: success,
+        data: {
+          holdTimeMs: currentHoldTime,
+          targetHoldMs: holdDuration
+        }
+      };
+
+      // For React Native WebView
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify(result));
+      }
+      // For web iframe
+      window.parent.postMessage(result, '*');
+    }
+
+    // Event listeners
+    holdButton.addEventListener('touchstart', startHold, { passive: false });
+    holdButton.addEventListener('mousedown', startHold);
+    holdButton.addEventListener('touchend', stopHold, { passive: false });
+    holdButton.addEventListener('touchcancel', stopHold, { passive: false });
+    holdButton.addEventListener('mouseup', stopHold);
+    holdButton.addEventListener('mouseleave', stopHold);
+
+    // Prevent context menu on long press
+    holdButton.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Prevent double-tap zoom
+    document.addEventListener('touchend', (e) => {
+      e.preventDefault();
+    }, { passive: false });
+
+    // Start countdown when page loads
+    startCountdown();
+  </script>
+</body>
+</html>

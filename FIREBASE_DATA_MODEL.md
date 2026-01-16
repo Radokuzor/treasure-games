@@ -80,6 +80,26 @@ Stores all game information including location-based and virtual games.
   winnerSlots?: number,             // Number of winners (default: 3)
   accuracyRadius?: number,          // Success radius in meters (default: 10)
 
+  // Mini-Game Challenge (Optional - for location games)
+  // When configured, players must complete this challenge upon arrival at the location
+  miniGame?: {
+    type: 'tap_count' | 'hold_duration' | 'rhythm_tap',
+    config: {
+      // For tap_count:
+      targetTaps?: number,          // Number of taps required (default: 100)
+      timeLimit?: number,           // Time limit in seconds (default: 30)
+      
+      // For hold_duration:
+      holdDuration?: number,        // Duration to hold in milliseconds (default: 5000)
+      
+      // For rhythm_tap:
+      bpm?: number,                 // Beats per minute (default: 120)
+      requiredBeats?: number,       // Number of beats to hit (default: 10)
+      toleranceMs?: number,         // Timing tolerance in ms (default: 150)
+      requiredScore?: number,       // Required accuracy percentage (default: 70)
+    }
+  },
+
   // Virtual Game Specific Fields
   virtualType?: 'tap',              // Type of virtual game
   targetTaps?: number,              // For tap games: target number of taps (default: 1000)
@@ -334,6 +354,64 @@ service cloud.firestore {
   }
 }
 ```
+
+---
+
+## Mini-Game Challenges
+
+### Overview
+
+Mini-game challenges are optional features for location-based games. When configured, players must complete a mini-game challenge when they arrive at the treasure location (within the accuracy radius) before they can win.
+
+### Benefits
+
+- **No App Store Updates**: Mini-games are rendered via WebView using HTML files stored in Firebase Storage
+- **Easy Configuration**: Admins can configure challenge type and difficulty per game
+- **Dynamic Updates**: HTML files can be updated without app deployment
+
+### Available Mini-Game Types
+
+#### 1. Tap Count (`tap_count`)
+Players must tap the screen a specified number of times within a time limit.
+
+**Config Options:**
+- `targetTaps`: Number of taps required (default: 100)
+- `timeLimit`: Time limit in seconds (default: 30)
+
+#### 2. Hold Duration (`hold_duration`)
+Players must hold a button for a specified duration without releasing.
+
+**Config Options:**
+- `holdDuration`: Duration to hold in milliseconds (default: 5000 = 5 seconds)
+
+#### 3. Rhythm Tap (`rhythm_tap`)
+Players must tap in sync with a beat pattern.
+
+**Config Options:**
+- `bpm`: Beats per minute (default: 120)
+- `requiredBeats`: Number of beats to hit (default: 10)
+- `toleranceMs`: Timing tolerance in milliseconds (default: 150)
+- `requiredScore`: Required accuracy percentage to win (default: 70)
+
+### Firebase Storage Structure for Mini-Games
+
+```
+storage/
+  mini-games/
+    tap_count.html      # Tap X times game
+    hold_duration.html  # Hold for X seconds game
+    rhythm_tap.html     # Tap on beat game
+```
+
+### Adding New Mini-Game Types
+
+To add a new mini-game type:
+
+1. Create a new HTML file with the game logic
+2. Upload to Firebase Storage under `mini-games/`
+3. Update `MiniGameWebView.jsx` to handle the new type
+4. Update `AdminScreen.jsx` to add configuration UI
+5. Update `LiveGameScreen.jsx` to pass correct config
 
 ---
 

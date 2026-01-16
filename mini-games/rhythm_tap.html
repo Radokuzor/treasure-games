@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Rhythm Challenge</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .title {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      margin-bottom: 24px;
+      gap: 12px;
+    }
+
+    .stat-box {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px 8px;
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .stat-value.score {
+      color: #10B981;
+    }
+
+    .stat-value.combo {
+      color: #F59E0B;
+    }
+
+    .stat-value.beats {
+      color: #8B5CF6;
+    }
+
+    .beat-indicator-container {
+      width: 100%;
+      height: 80px;
+      position: relative;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+
+    .beat-track {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(-50%);
+    }
+
+    .hit-zone {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 60px;
+      height: 60px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hit-zone-inner {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .beat-dot {
+      position: absolute;
+      top: 50%;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%);
+      transform: translateY(-50%);
+      box-shadow: 0 0 20px rgba(236, 72, 153, 0.5);
+      transition: left 0.05s linear;
+    }
+
+    .feedback {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      font-weight: 800;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .feedback.perfect {
+      color: #10B981;
+      animation: feedbackPop 0.5s ease-out forwards;
+    }
+
+    .feedback.good {
+      color: #F59E0B;
+      animation: feedbackPop 0.5s ease-out forwards;
+    }
+
+    .feedback.miss {
+      color: #EF4444;
+      animation: feedbackPop 0.5s ease-out forwards;
+    }
+
+    @keyframes feedbackPop {
+      0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
+      50% { transform: translate(-50%, -50%) scale(1.2); }
+      100% { opacity: 0; transform: translate(-50%, -80%) scale(1); }
+    }
+
+    .tap-button {
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      color: white;
+      box-shadow: 0 10px 40px rgba(236, 72, 153, 0.4);
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      margin-bottom: 24px;
+    }
+
+    .tap-button:active {
+      transform: scale(0.95);
+      box-shadow: 0 5px 20px rgba(236, 72, 153, 0.3);
+    }
+
+    .tap-button.disabled {
+      background: linear-gradient(135deg, #6B7280 0%, #4B5563 100%);
+      box-shadow: 0 10px 40px rgba(107, 114, 128, 0.3);
+      pointer-events: none;
+    }
+
+    .tap-button .icon {
+      font-size: 56px;
+      transition: transform 0.1s ease;
+    }
+
+    .tap-button:active .icon {
+      transform: scale(0.9);
+    }
+
+    .pulse-ring {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 3px solid rgba(236, 72, 153, 0.5);
+      animation: pulseRing 0.5s ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes pulseRing {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+
+    .bpm-display {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .result-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .result-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .result-icon {
+      font-size: 80px;
+      margin-bottom: 24px;
+    }
+
+    .result-title {
+      font-size: 32px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .result-subtitle {
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 8px;
+    }
+
+    .result-stats {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .result-overlay.success .result-title {
+      color: #10B981;
+    }
+
+    .result-overlay.failure .result-title {
+      color: #EF4444;
+    }
+
+    .countdown-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .countdown-number {
+      font-size: 120px;
+      font-weight: 800;
+      color: #EC4899;
+      animation: countdownPulse 1s ease-in-out;
+    }
+
+    @keyframes countdownPulse {
+      0% { transform: scale(0.5); opacity: 0; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .tap-button-container {
+      position: relative;
+      width: 180px;
+      height: 180px;
+      margin-bottom: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="countdown-overlay" id="countdownOverlay">
+    <div class="countdown-number" id="countdownNumber">3</div>
+  </div>
+
+  <div class="container" id="gameContainer">
+    <h1 class="title">Rhythm Challenge!</h1>
+    <p class="subtitle">Tap on the beat to win!</p>
+
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-label">Score</div>
+        <div class="stat-value score" id="scoreDisplay">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Combo</div>
+        <div class="stat-value combo" id="comboDisplay">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Beats</div>
+        <div class="stat-value beats" id="beatsDisplay">0/10</div>
+      </div>
+    </div>
+
+    <div class="beat-indicator-container" id="beatContainer">
+      <div class="beat-track"></div>
+      <div class="hit-zone">
+        <div class="hit-zone-inner"></div>
+      </div>
+    </div>
+
+    <div class="tap-button-container">
+      <button class="tap-button" id="tapButton">
+        <span class="icon">🎵</span>
+      </button>
+    </div>
+
+    <div class="bpm-display" id="bpmDisplay">120 BPM</div>
+  </div>
+
+  <div class="result-overlay" id="resultOverlay">
+    <div class="result-icon" id="resultIcon">🎉</div>
+    <div class="result-title" id="resultTitle">You Won!</div>
+    <div class="result-subtitle" id="resultSubtitle">Great rhythm!</div>
+    <div class="result-stats" id="resultStats"></div>
+  </div>
+
+  <script>
+    // Get config from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const bpm = parseInt(urlParams.get('bpm')) || 120;
+    const requiredBeats = parseInt(urlParams.get('requiredBeats')) || 10;
+    const toleranceMs = parseInt(urlParams.get('toleranceMs')) || 150;
+    const requiredScore = parseInt(urlParams.get('requiredScore')) || 70; // Percentage
+
+    // Calculate beat interval
+    const beatInterval = 60000 / bpm; // milliseconds per beat
+
+    // Game state
+    let gameStarted = false;
+    let gameEnded = false;
+    let score = 0;
+    let combo = 0;
+    let maxCombo = 0;
+    let beatsHit = 0;
+    let totalBeats = 0;
+    let perfectHits = 0;
+    let goodHits = 0;
+    let misses = 0;
+    let beatTimer = null;
+    let nextBeatTime = 0;
+    let beats = [];
+
+    // DOM elements
+    const tapButton = document.getElementById('tapButton');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const comboDisplay = document.getElementById('comboDisplay');
+    const beatsDisplay = document.getElementById('beatsDisplay');
+    const beatContainer = document.getElementById('beatContainer');
+    const bpmDisplay = document.getElementById('bpmDisplay');
+    const resultOverlay = document.getElementById('resultOverlay');
+    const resultIcon = document.getElementById('resultIcon');
+    const resultTitle = document.getElementById('resultTitle');
+    const resultSubtitle = document.getElementById('resultSubtitle');
+    const resultStats = document.getElementById('resultStats');
+    const countdownOverlay = document.getElementById('countdownOverlay');
+    const countdownNumber = document.getElementById('countdownNumber');
+
+    // Initialize display
+    bpmDisplay.textContent = bpm + ' BPM';
+    beatsDisplay.textContent = `0/${requiredBeats}`;
+
+    // Create a beat dot
+    function createBeatDot() {
+      const dot = document.createElement('div');
+      dot.className = 'beat-dot';
+      dot.style.left = '100%';
+      beatContainer.appendChild(dot);
+
+      const beatTime = Date.now() + (beatInterval * 2); // Time when beat should be hit
+      beats.push({ element: dot, targetTime: beatTime, hit: false });
+
+      // Animate dot moving left
+      let startTime = Date.now();
+      const duration = beatInterval * 2;
+
+      function animateDot() {
+        if (gameEnded) {
+          dot.remove();
+          return;
+        }
+
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+        const leftPos = 100 - (progress * 100);
+
+        if (leftPos < -20) {
+          // Beat missed
+          const beatIndex = beats.findIndex(b => b.element === dot);
+          if (beatIndex !== -1 && !beats[beatIndex].hit) {
+            handleMiss();
+            beats.splice(beatIndex, 1);
+          }
+          dot.remove();
+          return;
+        }
+
+        dot.style.left = leftPos + '%';
+        requestAnimationFrame(animateDot);
+      }
+
+      requestAnimationFrame(animateDot);
+    }
+
+    // Show feedback
+    function showFeedback(type) {
+      const feedback = document.createElement('div');
+      feedback.className = `feedback ${type}`;
+      feedback.textContent = type === 'perfect' ? 'PERFECT!' : type === 'good' ? 'GOOD!' : 'MISS!';
+      beatContainer.appendChild(feedback);
+      setTimeout(() => feedback.remove(), 500);
+    }
+
+    // Show pulse ring on button
+    function showPulseRing() {
+      const ring = document.createElement('div');
+      ring.className = 'pulse-ring';
+      tapButton.parentElement.appendChild(ring);
+      setTimeout(() => ring.remove(), 500);
+    }
+
+    // Handle tap
+    function handleTap(e) {
+      e.preventDefault();
+      
+      if (!gameStarted || gameEnded) return;
+
+      const now = Date.now();
+      showPulseRing();
+
+      // Find the closest beat
+      let closestBeat = null;
+      let closestDiff = Infinity;
+
+      for (const beat of beats) {
+        if (beat.hit) continue;
+        const diff = Math.abs(now - beat.targetTime);
+        if (diff < closestDiff) {
+          closestDiff = diff;
+          closestBeat = beat;
+        }
+      }
+
+      if (closestBeat && closestDiff <= toleranceMs * 2) {
+        closestBeat.hit = true;
+        beatsHit++;
+
+        if (closestDiff <= toleranceMs / 2) {
+          // Perfect hit
+          perfectHits++;
+          score += 100 * (1 + combo * 0.1);
+          combo++;
+          showFeedback('perfect');
+        } else if (closestDiff <= toleranceMs) {
+          // Good hit
+          goodHits++;
+          score += 50 * (1 + combo * 0.1);
+          combo++;
+          showFeedback('good');
+        } else {
+          // Late/early but still counted
+          goodHits++;
+          score += 25;
+          combo = 0;
+          showFeedback('good');
+        }
+
+        maxCombo = Math.max(maxCombo, combo);
+
+        // Haptic feedback
+        if (navigator.vibrate) {
+          navigator.vibrate(10);
+        }
+      } else {
+        // Miss
+        handleMiss();
+      }
+
+      updateDisplay();
+    }
+
+    // Handle miss
+    function handleMiss() {
+      misses++;
+      combo = 0;
+      showFeedback('miss');
+
+      if (navigator.vibrate) {
+        navigator.vibrate([30, 30, 30]);
+      }
+
+      updateDisplay();
+    }
+
+    // Update display
+    function updateDisplay() {
+      scoreDisplay.textContent = Math.round(score);
+      comboDisplay.textContent = combo;
+      beatsDisplay.textContent = `${beatsHit}/${requiredBeats}`;
+    }
+
+    // Start the beat generator
+    function startBeats() {
+      totalBeats = 0;
+
+      function generateBeat() {
+        if (gameEnded) return;
+
+        totalBeats++;
+        createBeatDot();
+
+        if (totalBeats >= requiredBeats) {
+          // Wait for last beat to pass, then end game
+          setTimeout(() => {
+            endGame();
+          }, beatInterval * 2.5);
+          return;
+        }
+
+        beatTimer = setTimeout(generateBeat, beatInterval);
+      }
+
+      // Start first beat after a short delay
+      setTimeout(generateBeat, beatInterval);
+    }
+
+    // Countdown before game starts
+    function startCountdown() {
+      let count = 3;
+      countdownNumber.textContent = count;
+
+      const countdownInterval = setInterval(() => {
+        count--;
+        if (count > 0) {
+          countdownNumber.textContent = count;
+          countdownNumber.style.animation = 'none';
+          countdownNumber.offsetHeight;
+          countdownNumber.style.animation = 'countdownPulse 1s ease-in-out';
+        } else if (count === 0) {
+          countdownNumber.textContent = 'GO!';
+          countdownNumber.style.color = '#EC4899';
+        } else {
+          clearInterval(countdownInterval);
+          countdownOverlay.classList.add('hidden');
+          gameStarted = true;
+          startBeats();
+        }
+      }, 1000);
+    }
+
+    // End the game
+    function endGame() {
+      if (gameEnded) return;
+      gameEnded = true;
+
+      clearTimeout(beatTimer);
+      tapButton.classList.add('disabled');
+
+      // Calculate final score percentage
+      const maxPossibleScore = requiredBeats * 100 * 1.5; // With combo bonus
+      const scorePercent = Math.round((score / maxPossibleScore) * 100);
+      const hitPercent = Math.round((beatsHit / requiredBeats) * 100);
+
+      const success = hitPercent >= requiredScore;
+
+      if (success) {
+        resultOverlay.classList.add('success');
+        resultIcon.textContent = '🎉';
+        resultTitle.textContent = 'You Won!';
+        resultSubtitle.textContent = `${hitPercent}% accuracy!`;
+      } else {
+        resultOverlay.classList.add('failure');
+        resultIcon.textContent = '🎵';
+        resultTitle.textContent = 'Not Quite!';
+        resultSubtitle.textContent = `${hitPercent}% accuracy (need ${requiredScore}%)`;
+      }
+
+      resultStats.textContent = `Perfect: ${perfectHits} | Good: ${goodHits} | Miss: ${misses} | Max Combo: ${maxCombo}`;
+      resultOverlay.classList.add('show');
+
+      // Send result to parent
+      const result = {
+        type: 'complete',
+        success: success,
+        data: {
+          score: Math.round(score),
+          beatsHit: beatsHit,
+          totalBeats: requiredBeats,
+          perfectHits: perfectHits,
+          goodHits: goodHits,
+          misses: misses,
+          maxCombo: maxCombo,
+          accuracy: hitPercent
+        }
+      };
+
+      // For React Native WebView
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify(result));
+      }
+      // For web iframe
+      window.parent.postMessage(result, '*');
+    }
+
+    // Event listeners
+    tapButton.addEventListener('touchstart', handleTap, { passive: false });
+    tapButton.addEventListener('mousedown', handleTap);
+
+    // Prevent double-tap zoom
+    document.addEventListener('touchend', (e) => {
+      e.preventDefault();
+    }, { passive: false });
+
+    // Start countdown when page loads
+    startCountdown();
+  </script>
+</body>
+</html>
