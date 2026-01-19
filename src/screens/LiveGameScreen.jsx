@@ -1809,6 +1809,41 @@ export default function LiveGameScreen({ route, navigation }) {
                   </LinearGradient>
                 </TouchableOpacity>
               )}
+
+              {/* Winner Card Selfie Button - for users currently in top 3 */}
+              {userRank && userRank <= 3 && !showMiniGame && (
+                <View style={styles.topThreeWinnerCardSection}>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setWinnerCardData({
+                        gameName: game.name,
+                        prizeAmount: Number(game.prizeAmount) || 0,
+                        position: userRank,
+                        score: userBestScore,
+                        gameType: 'virtual',
+                      });
+                      setShowWinnerCard(true);
+                    }}
+                    style={styles.topThreeWinnerCardButton}
+                  >
+                    <LinearGradient
+                      colors={['#10B981', '#059669']}
+                      style={styles.topThreeWinnerCardGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Ionicons name="camera" size={20} color="#FFFFFF" />
+                      <Text style={styles.topThreeWinnerCardText}>
+                        📸 Take Winner Card Selfie
+                      </Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  <Text style={styles.topThreeWinnerCardHint}>
+                    You're #{userRank}! Share your win to claim your prize when the game ends.
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -1825,6 +1860,37 @@ export default function LiveGameScreen({ route, navigation }) {
                     : 'Thanks for playing!'}
               </Text>
               
+              {/* Winner Card Selfie Button - for top 3 finishers */}
+              {userRank && userRank <= 3 && (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setWinnerCardData({
+                      gameName: game.name,
+                      prizeAmount: Number(game.prizeAmount) || 0,
+                      position: userRank,
+                      score: userBestScore,
+                      gameType: 'virtual',
+                    });
+                    setShowWinnerCard(true);
+                  }}
+                  style={styles.winnerCardButtonLarge}
+                >
+                  <LinearGradient
+                    colors={['#8B5CF6', '#6366F1']}
+                    style={styles.winnerCardButtonGradientLarge}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Ionicons name="camera" size={24} color="#FFFFFF" />
+                    <Text style={styles.winnerCardButtonTextLarge}>Take Winner Card Selfie</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
+              {userRank && userRank <= 3 && (
+                <Text style={styles.winnerCardHintLarge}>Share your win to claim your prize!</Text>
+              )}
+
               {/* Final Leaderboard */}
               <View style={styles.finalLeaderboard}>
                 <Text style={styles.finalLeaderboardTitle}>Final Results</Text>
@@ -1863,16 +1929,39 @@ export default function LiveGameScreen({ route, navigation }) {
 
           {/* Winner Status */}
           {isWinner && (
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={handleExit}
-              accessibilityRole="button"
-              accessibilityLabel="You won. Close game."
-              style={styles.winnerBadge}
-            >
-              <Ionicons name="trophy" size={32} color="#FFD700" />
-              <Text style={styles.winnerText}>🎉 You Won! Tap to close</Text>
-            </TouchableOpacity>
+            <View style={styles.winnerStatusContainer}>
+              <View style={styles.winnerBadge}>
+                <Ionicons name="trophy" size={32} color="#FFD700" />
+                <Text style={styles.winnerText}>🎉 You Won!</Text>
+              </View>
+              
+              {/* Take Winner Card Selfie Button */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => {
+                  setWinnerCardData({
+                    gameName: game.name,
+                    prizeAmount: Number(game.prizeAmount) || 0,
+                    position: userRank || 1,
+                    score: userBestScore,
+                    gameType: isVirtualGame ? 'virtual' : 'location',
+                  });
+                  setShowWinnerCard(true);
+                }}
+                style={styles.winnerCardButton}
+              >
+                <LinearGradient
+                  colors={['#8B5CF6', '#6366F1']}
+                  style={styles.winnerCardButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="camera" size={20} color="#FFFFFF" />
+                  <Text style={styles.winnerCardButtonText}>Take Winner Card Selfie</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              <Text style={styles.winnerCardHint}>Required to claim your prize!</Text>
+            </View>
           )}
 
           {/* Location Game: Submit Attempt Button */}
@@ -2217,6 +2306,10 @@ const styles = StyleSheet.create({
     color: '#1A1A2E',
     textAlign: 'center',
   },
+  winnerStatusContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
   winnerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2224,13 +2317,94 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 16,
     borderRadius: 20,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   winnerText: {
     fontSize: 24,
     fontWeight: '800',
     color: '#1A1A2E',
     marginLeft: 12,
+  },
+  winnerCardButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  winnerCardButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  winnerCardButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  winnerCardHint: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8B5CF6',
+    textAlign: 'center',
+  },
+  winnerCardButtonLarge: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  winnerCardButtonGradientLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  winnerCardButtonTextLarge: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  winnerCardHintLarge: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8B5CF6',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  // Top 3 Winner Card button (during active game)
+  topThreeWinnerCardSection: {
+    alignItems: 'center',
+    marginTop: 16,
+    width: '100%',
+  },
+  topThreeWinnerCardButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  topThreeWinnerCardGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  topThreeWinnerCardText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  topThreeWinnerCardHint: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10B981',
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 16,
   },
   submitButton: {
     width: '100%',
