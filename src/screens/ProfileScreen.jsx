@@ -5,6 +5,7 @@ import {
   Image,
   View,
   Text,
+  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -35,6 +36,7 @@ const ProfileScreen = ({ navigation }) => {
   const [locationEnabled, setLocationEnabled] = useState(true);
   const [showRedeemModal, setShowRedeemModal] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [socialMediaLink, setSocialMediaLink] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [uid, setUid] = useState(null);
   const [profile, setProfile] = useState({
@@ -149,6 +151,7 @@ const ProfileScreen = ({ navigation }) => {
             userId: uid,
             method, // 'amazon' | 'visa'
             amount: currentBalance,
+            socialMediaLink: socialMediaLink.trim() || null,
             status: 'requested',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -169,6 +172,7 @@ const ProfileScreen = ({ navigation }) => {
       });
 
       setShowRedeemModal(false);
+      setSocialMediaLink(''); // Reset the link
       Alert.alert(
         'Redeem Requested',
         `Your ${method === 'amazon' ? 'Amazon e-gift card' : 'Visa gift card'} request for $${redeemedAmount.toFixed(
@@ -561,6 +565,37 @@ const ProfileScreen = ({ navigation }) => {
               Minimum redemption: $25
             </Text>
 
+            {/* Social Post Requirement Notice */}
+            <View style={styles.socialPostNotice}>
+              <Ionicons name="warning" size={20} color="#F59E0B" />
+              <Text style={styles.socialPostNoticeText}>
+                To receive your payout, you must have posted your Winner Card on social media (Instagram, TikTok, or Facebook). Paste the link below!
+              </Text>
+            </View>
+
+            {/* Social Media Link Input */}
+            <View style={styles.socialLinkContainer}>
+              <Text style={[styles.socialLinkLabel, { color: theme.colors.text }]}>
+                📸 Your Winner Card Post Link (Required)
+              </Text>
+              <Text style={[styles.socialLinkHint, { color: theme.colors.textSecondary }]}>
+                Paste the link to your social media post showing your winner card
+              </Text>
+              <View style={[styles.socialLinkInputContainer, { borderColor: theme.colors.textSecondary }]}>
+                <Ionicons name="link-outline" size={20} color={theme.colors.textSecondary} />
+                <TextInput
+                  style={[styles.socialLinkInput, { color: theme.colors.text }]}
+                  placeholder="https://instagram.com/p/..."
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={socialMediaLink}
+                  onChangeText={setSocialMediaLink}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+            </View>
+
             <TouchableOpacity
               onPress={() => void handleRedeem('amazon')}
               activeOpacity={0.85}
@@ -596,7 +631,10 @@ const ProfileScreen = ({ navigation }) => {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => setShowRedeemModal(false)}
+              onPress={() => {
+                setShowRedeemModal(false);
+                setSocialMediaLink('');
+              }}
               activeOpacity={0.8}
               style={styles.cancelButton}
               disabled={isRedeeming}
@@ -827,7 +865,49 @@ const styles = StyleSheet.create({
   redeemNote: {
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: 18,
+    marginBottom: 12,
+  },
+  socialPostNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  socialPostNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#B45309',
+    lineHeight: 18,
+  },
+  socialLinkContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  socialLinkLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  socialLinkHint: {
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  socialLinkInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  socialLinkInput: {
+    flex: 1,
+    fontSize: 14,
   },
   fullWidth: {
     width: '100%',

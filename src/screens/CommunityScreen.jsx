@@ -671,7 +671,9 @@ const CommunityScreen = () => {
                             <View style={styles.gameCardStat}>
                               <Ionicons name="people" size={16} color={theme.colors.accent} />
                               <Text style={[styles.gameCardStatText, { color: theme.colors.textSecondary }]}>
-                                {game.winners?.length || 0} / {game.winnerSlots || 3} Winners
+                                {game.type === 'virtual' 
+                                  ? `${game.leaderboard?.length || 0} Players`
+                                  : `${game.winners?.length || 0} / ${game.winnerSlots || 3} Winners`}
                               </Text>
                             </View>
                             <View style={styles.tapToJoinButton}>
@@ -731,7 +733,9 @@ const CommunityScreen = () => {
                                 ${game.prizeAmount} • {game.city}
                               </Text>
                               <Text style={styles.calloutWinners}>
-                                {game.winners?.length || 0} / {game.winnerSlots || 3} Winners
+                                {game.type === 'virtual' 
+                                  ? `${game.leaderboard?.length || 0} Players`
+                                  : `${game.winners?.length || 0} / ${game.winnerSlots || 3} Winners`}
                               </Text>
                               <Text style={styles.calloutTap}>Tap to join!</Text>
                             </View>

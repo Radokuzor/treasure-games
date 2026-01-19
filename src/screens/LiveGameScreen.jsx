@@ -46,6 +46,8 @@ if (Platform.OS !== 'web') {
 
 import { getFirebaseAuth, getFirebaseDb } from '../config/firebase';
 import MiniGameWebView from '../components/MiniGameWebView';
+import WinnerCardScreen from './WinnerCardScreen';
+import { checkWinEligibility, recordDailyWin, processBattleRoyaleWinners } from '../utils/winEligibility';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CAROUSEL_HEIGHT = 400;
@@ -93,6 +95,29 @@ export default function LiveGameScreen({ route, navigation }) {
   const [miniGameTriggered, setMiniGameTriggered] = useState(false);
   const [miniGameCompleted, setMiniGameCompleted] = useState(false);
   const [hasAutoOpened, setHasAutoOpened] = useState(false); // Tracks if auto-open has happened (prevents re-opening after close)
+
+  // Win eligibility state (daily limit)
+  const [winEligible, setWinEligible] = useState(true);
+
+  // Podium animation state
+  const [showPodium, setShowPodium] = useState(true);
+  const podiumAnim1 = useRef(new Animated.Value(0)).current;
+  const podiumAnim2 = useRef(new Animated.Value(0)).current;
+  const podiumAnim3 = useRef(new Animated.Value(0)).current;
+  const podiumScaleAnim = useRef(new Animated.Value(0.8)).current;
+  const podiumOpacity = useRef(new Animated.Value(0)).current;
+  const [eligibilityChecked, setEligibilityChecked] = useState(false);
+  const [eligibilityMessage, setEligibilityMessage] = useState('');
+
+  // Battle Royale state (for virtual games)
+  const [timeRemaining, setTimeRemaining] = useState(null); // Time remaining in ms
+  const [userBestScore, setUserBestScore] = useState(null);
+  const [userRank, setUserRank] = useState(null);
+  const [competitionEnded, setCompetitionEnded] = useState(false);
+
+  // Winner card state
+  const [showWinnerCard, setShowWinnerCard] = useState(false);
+  const [winnerCardData, setWinnerCardData] = useState(null);
 
   // Exit game screen
   const handleExit = () => {
@@ -219,6 +244,49 @@ export default function LiveGameScreen({ route, navigation }) {
     return (meters * 0.000621371).toFixed(1);
   };
 
+  // Format time remaining for countdown
+  const formatTimeRemaining = (ms) => {
+    if (ms === null || ms <= 0) return '00:00:00';
+    
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Get sorted leaderboard for virtual games
+  const getSortedLeaderboard = () => {
+    if (!game?.leaderboard) return [];
+    
+    return [...game.leaderboard].sort((a, b) => {
+      // For tap games, lower time (faster) is better
+      if (game.virtualGame?.type === 'tap_count') {
+        return a.score - b.score;
+      }
+      // For other games, higher score is better
+      return b.score - a.score;
+    });
+  };
+
+  // Format score for display based on game type
+  const formatScore = (score, gameType) => {
+    if (gameType === 'tap_count') {
+      // Score is time in ms, format as seconds
+      return `${(score / 1000).toFixed(2)}s`;
+    }
+    if (gameType === 'hold_duration') {
+      // Score is hold time in ms
+      return `${(score / 1000).toFixed(1)}s`;
+    }
+    // For rhythm and others, just show the score
+    return score.toLocaleString();
+  };
+
   const formatDistanceAway = (meters) => {
     if (typeof meters !== 'number' || !Number.isFinite(meters)) return '';
 
@@ -324,7 +392,7 @@ export default function LiveGameScreen({ route, navigation }) {
     if (!db) return;
 
     const userRef = doc(db, 'users', currentUser.uid);
-    const unsubscribe = onSnapshot(userRef, (snapshot) => {
+    const unsubscribe = onSnapshot(userRef, async (snapshot) => {
       if (snapshot.exists()) {
         const userData = snapshot.data();
         setCompassEnabled(userData?.compassEnabled !== false);
@@ -335,6 +403,195 @@ export default function LiveGameScreen({ route, navigation }) {
 
     return () => unsubscribe();
   }, [currentUser]);
+
+  // Check win eligibility when game loads (daily limit)
+  useEffect(() => {
+    const checkEligibility = async () => {
+      if (!currentUser || !game) return;
+
+      const db = getFirebaseDb();
+      if (!db) return;
+
+      try {
+        const result = await checkWinEligibility(db, currentUser.uid);
+        setWinEligible(result.eligible);
+        setEligibilityChecked(true);
+
+        if (!result.eligible && result.message) {
+          setEligibilityMessage(result.message);
+          // Show toast when they open the game
+          showToast(result.message);
+        }
+
+        console.log('🎯 Win eligibility check:', result.eligible ? 'ELIGIBLE' : 'NOT ELIGIBLE');
+      } catch (error) {
+        console.error('Error checking eligibility:', error);
+        // On error, allow them to play (fail open)
+        setWinEligible(true);
+        setEligibilityChecked(true);
+      }
+    };
+
+    checkEligibility();
+  }, [currentUser, game?.id]); // Only re-check when user or game changes
+
+  // Battle Royale countdown timer for virtual games
+  useEffect(() => {
+    if (!game || game.type !== 'virtual') return;
+    if (!game.virtualGame?.endsAt) return;
+
+    const updateTimer = () => {
+      const endsAt = game.virtualGame.endsAt?.toDate?.() || new Date(game.virtualGame.endsAt);
+      const now = new Date();
+      const remaining = endsAt.getTime() - now.getTime();
+
+      if (remaining <= 0) {
+        setTimeRemaining(0);
+        setCompetitionEnded(true);
+      } else {
+        setTimeRemaining(remaining);
+        setCompetitionEnded(false);
+      }
+    };
+
+    // Initial update
+    updateTimer();
+
+    // Update every second
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [game?.virtualGame?.endsAt]);
+
+  // Auto-complete virtual game when timer ends
+  useEffect(() => {
+    if (!competitionEnded || !game || game.type !== 'virtual') return;
+    if (game.status === 'completed') return; // Already completed
+    
+    const completeGame = async () => {
+      try {
+        const db = getFirebaseDb();
+        if (!db) return;
+        
+        const gameRef = doc(db, 'games', gameId);
+        
+        // Process winners and award prizes
+        const winners = await processBattleRoyaleWinners(db, { ...game, id: gameId });
+        
+        // Mark game as completed with winner info
+        await updateDoc(gameRef, {
+          status: 'completed',
+          completedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          battleRoyaleWinners: winners,
+        });
+        
+        console.log('🏁 Virtual game auto-completed:', gameId);
+        console.log('🏆 Winners:', winners);
+        
+        // Show notification to current user if they're a winner
+        const userWin = winners.find(w => w.oderId === currentUser?.uid);
+        if (userWin) {
+          showToast(`🎉 You won #${userWin.position}! Prize: $${userWin.prizeAmount}. Claim within 30 min!`);
+          if (Platform.OS !== 'web' && Haptics) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+        } else {
+          // Check if they were on the leaderboard at all
+          const leaderboard = game.leaderboard || [];
+          const userRankIndex = leaderboard.findIndex(entry => entry.oderId === currentUser?.uid);
+          if (userRankIndex >= 0) {
+            showToast(`Competition ended! You finished #${userRankIndex + 1}. Better luck next time!`);
+          }
+        }
+      } catch (error) {
+        console.error('Error auto-completing game:', error);
+      }
+    };
+    
+    completeGame();
+  }, [competitionEnded, game?.status, gameId]);
+
+  // Track user's rank in leaderboard
+  useEffect(() => {
+    if (!game || game.type !== 'virtual' || !currentUser) return;
+
+    const leaderboard = game.leaderboard || [];
+    const userEntry = leaderboard.find(entry => entry.oderId === currentUser.uid);
+
+    if (userEntry) {
+      setUserBestScore(userEntry.score);
+      // Find rank (leaderboard should be sorted by score)
+      const sortedLeaderboard = [...leaderboard].sort((a, b) => {
+        // For tap games, lower time is better
+        if (game.virtualGame?.type === 'tap_count') {
+          return a.score - b.score;
+        }
+        // For other games, higher score is better
+        return b.score - a.score;
+      });
+      const rank = sortedLeaderboard.findIndex(entry => entry.oderId === currentUser.uid) + 1;
+      setUserRank(rank);
+    } else {
+      setUserBestScore(null);
+      setUserRank(null);
+    }
+  }, [game?.leaderboard, currentUser]);
+
+  // Animate podium on virtual game load
+  useEffect(() => {
+    if (!game || game.type !== 'virtual' || !showPodium) return;
+
+    // Fade in the podium container
+    Animated.timing(podiumOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    // Scale up the container
+    Animated.spring(podiumScaleAnim, {
+      toValue: 1,
+      tension: 50,
+      friction: 7,
+      useNativeDriver: true,
+    }).start();
+
+    // Animate podiums rising up (2nd place, then 1st, then 3rd)
+    const animatePodiums = () => {
+      // 2nd place rises first
+      Animated.spring(podiumAnim2, {
+        toValue: 1,
+        tension: 40,
+        friction: 6,
+        useNativeDriver: true,
+      }).start();
+
+      // 1st place rises after a delay (tallest)
+      setTimeout(() => {
+        Animated.spring(podiumAnim1, {
+          toValue: 1,
+          tension: 40,
+          friction: 6,
+          useNativeDriver: true,
+        }).start();
+      }, 200);
+
+      // 3rd place rises last
+      setTimeout(() => {
+        Animated.spring(podiumAnim3, {
+          toValue: 1,
+          tension: 40,
+          friction: 6,
+          useNativeDriver: true,
+        }).start();
+      }, 400);
+    };
+
+    // Start animation after a brief delay
+    const timer = setTimeout(animatePodiums, 300);
+    return () => clearTimeout(timer);
+  }, [game?.type, showPodium]);
 
   // Auto-join game when screen loads
   useEffect(() => {
@@ -398,8 +655,9 @@ export default function LiveGameScreen({ route, navigation }) {
             }
           }
 
-          // Show leaderboard if game is completed
-          if (gameData.status === 'completed' && !showLeaderboard) {
+          // Show leaderboard if game is completed (only for location games)
+          // Virtual games have their own "Competition Ended" view
+          if (gameData.status === 'completed' && !showLeaderboard && gameData.type !== 'virtual') {
             setTimeout(() => setShowLeaderboard(true), 2000);
           }
         } else {
@@ -737,8 +995,16 @@ export default function LiveGameScreen({ route, navigation }) {
   const handleMiniGameComplete = async (success, data) => {
     console.log('🎮 Mini-game result:', { success, data });
     setShowMiniGame(false);
+    setShowPodium(true); // Show podium again after mini-game completes
     setMiniGameCompleted(true);
 
+    // For virtual games (battle royale), update leaderboard instead of immediate win
+    if (isVirtualGame && game.virtualGame?.endsAt) {
+      await updateBattleRoyaleScore(success, data);
+      return;
+    }
+
+    // For location games with mini-game challenges
     if (success) {
       // User won the mini-game, now record them as a winner
       await recordWinner(data);
@@ -753,21 +1019,169 @@ export default function LiveGameScreen({ route, navigation }) {
     }
   };
 
+  // Update battle royale leaderboard score
+  const updateBattleRoyaleScore = async (success, data) => {
+    if (!game || !currentUser) return;
+
+    try {
+      const db = getFirebaseDb();
+      const gameRef = doc(db, 'games', gameId);
+
+      // Calculate score based on game type
+      let score = 0;
+      const gameType = game.virtualGame?.type;
+
+      if (gameType === 'tap_count') {
+        // For tap games, score is time to complete (lower is better)
+        score = data?.timeMs || 999999;
+      } else if (gameType === 'hold_duration') {
+        // For hold games, score is how long they held
+        score = data?.holdTimeMs || 0;
+      } else if (gameType === 'rhythm_tap') {
+        // For rhythm games, use the calculated score
+        score = data?.score || 0;
+      } else {
+        // Default: use any score provided
+        score = data?.score || data?.timeMs || 0;
+      }
+
+      console.log('🏆 Battle Royale score:', { gameType, score, data });
+
+      // Get current leaderboard
+      const currentLeaderboard = game.leaderboard || [];
+      
+      // Find existing entry for this user
+      const existingIndex = currentLeaderboard.findIndex(
+        entry => entry.oderId === currentUser.uid
+      );
+
+      let shouldUpdate = false;
+      let newEntry = {
+        oderId: currentUser.uid,
+        username: currentUser.displayName || currentUser.email?.split('@')[0] || 'Player',
+        score,
+        oderdAt: new Date(),
+        attempts: 1,
+      };
+
+      if (existingIndex >= 0) {
+        const existingEntry = currentLeaderboard[existingIndex];
+        newEntry.attempts = (existingEntry.attempts || 0) + 1;
+
+        // Check if new score is better
+        if (gameType === 'tap_count') {
+          // Lower time is better
+          shouldUpdate = score < existingEntry.score;
+        } else {
+          // Higher score is better
+          shouldUpdate = score > existingEntry.score;
+        }
+
+        if (shouldUpdate) {
+          newEntry.score = score;
+        } else {
+          // Keep old score but update attempts
+          newEntry.score = existingEntry.score;
+        }
+      } else {
+        shouldUpdate = true;
+      }
+
+      // Update leaderboard
+      let updatedLeaderboard;
+      if (existingIndex >= 0) {
+        updatedLeaderboard = [...currentLeaderboard];
+        updatedLeaderboard[existingIndex] = newEntry;
+      } else {
+        updatedLeaderboard = [...currentLeaderboard, newEntry];
+      }
+
+      // Sort leaderboard
+      updatedLeaderboard.sort((a, b) => {
+        if (gameType === 'tap_count') {
+          return a.score - b.score; // Lower is better
+        }
+        return b.score - a.score; // Higher is better
+      });
+
+      // Save to Firestore
+      await updateDoc(gameRef, {
+        leaderboard: updatedLeaderboard,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Find user's new rank
+      const newRank = updatedLeaderboard.findIndex(
+        entry => entry.oderId === currentUser.uid
+      ) + 1;
+
+      // Show appropriate message and winner card for top 3
+      if (shouldUpdate) {
+        if (newRank <= 3) {
+          showToast(`🎉 New high score! You're now #${newRank}!`);
+          if (Platform.OS !== 'web' && Haptics) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          
+          // Show winner card for top 3 in Battle Royale
+          setTimeout(() => {
+            setWinnerCardData({
+              gameName: game.name,
+              prizeAmount: Number(game.prizeAmount) || 0,
+              position: newRank,
+              score: newEntry.score,
+              gameType: 'virtual',
+            });
+            setShowWinnerCard(true);
+          }, 1500);
+        } else {
+          showToast(`New personal best! Rank: #${newRank}`);
+        }
+      } else {
+        showToast(`Score: ${formatScore(score, gameType)} • Your best: ${formatScore(newEntry.score, gameType)}`);
+      }
+
+      // Allow playing again
+      setTimeout(() => {
+        setMiniGameTriggered(false);
+        setMiniGameCompleted(false);
+      }, 2000);
+
+    } catch (error) {
+      console.error('Error updating battle royale score:', error);
+      showToast('Error saving score. Please try again.');
+    }
+  };
+
   // Handle mini-game close (user cancelled)
   const handleMiniGameClose = () => {
     setShowMiniGame(false);
+    setShowPodium(true); // Show podium again when mini-game closes
     showToast('Challenge cancelled. Tap "Enter Game" to try again.');
     // Note: We do NOT reset hasAutoOpened here, so the game won't auto-open again
   };
 
   // Record winner in Firebase (extracted from handleSubmitAttempt)
   const recordWinner = async (miniGameData = null) => {
-    if (!game || !currentUser || !userLocation) return;
+    if (!game || !currentUser) return;
+
+    // For virtual games, userLocation might not be available
+    const isVirtual = game?.type === 'virtual';
 
     try {
       const db = getFirebaseDb();
       const gameRef = doc(db, 'games', gameId);
       const userRef = doc(db, 'users', currentUser.uid);
+
+      // Check win eligibility (daily limit) - do a fresh check
+      const eligibility = await checkWinEligibility(db, currentUser.uid);
+      
+      if (!eligibility.eligible) {
+        // User already won today - let them know but don't add to winners
+        console.log('🚫 User not eligible for win (daily limit):', eligibility.reason);
+        showToast(eligibility.message || "You've already won today! Great game though!");
+        return;
+      }
 
       const currentTime = Timestamp.now();
       const distanceMeters = typeof distance === 'number' && Number.isFinite(distance) ? distance : 0;
@@ -775,11 +1189,11 @@ export default function LiveGameScreen({ route, navigation }) {
       const attempt = {
         userId: currentUser.uid,
         attemptedAt: currentTime,
-        distance: distanceMeters,
-        location: {
+        distance: isVirtual ? 0 : distanceMeters,
+        location: isVirtual ? null : (userLocation ? {
           latitude: userLocation.latitude,
           longitude: userLocation.longitude,
-        },
+        } : null),
         miniGameResult: miniGameData,
       };
 
@@ -807,7 +1221,7 @@ export default function LiveGameScreen({ route, navigation }) {
             userId: currentUser.uid,
             position: winners.length + 1,
             completedAt: currentTime,
-            distance: distanceMeters,
+            distance: isVirtual ? 0 : distanceMeters,
             miniGameResult: miniGameData,
           };
 
@@ -832,9 +1246,32 @@ export default function LiveGameScreen({ route, navigation }) {
       });
 
       if (didWin) {
+        // Record the daily win for eligibility tracking
+        await recordDailyWin(
+          db,
+          currentUser.uid,
+          gameId,
+          game.name,
+          Number(game.prizeAmount) || 0
+        );
+
         setIsWinner(true);
+        setWinEligible(false); // Update local state immediately
         triggerCelebration();
         console.log('🎉 User won the game!');
+
+        // Show winner card for location games
+        if (!isVirtual) {
+          setTimeout(() => {
+            setWinnerCardData({
+              gameName: game.name,
+              prizeAmount: Number(game.prizeAmount) || 0,
+              position: 1, // First to arrive wins
+              gameType: 'location',
+            });
+            setShowWinnerCard(true);
+          }, 2000); // Delay to let celebration play
+        }
       } else if (wasAlreadyWinner) {
         setIsWinner(true);
         console.log('🏆 Winner already recorded for this user');
@@ -1010,8 +1447,8 @@ export default function LiveGameScreen({ route, navigation }) {
         <Ionicons name="close" size={32} color="#1A1A2E" />
       </TouchableOpacity>
 
-      {/* Compass - shows for 7s, hides for 5s */}
-      {showCompass && compassEnabled && !isWinner && (
+      {/* Compass - shows for 7s, hides for 5s (only for location games) */}
+      {showCompass && compassEnabled && !isWinner && !isVirtualGame && (
         <Animated.View
           style={[
             styles.compassContainer,
@@ -1104,6 +1541,13 @@ export default function LiveGameScreen({ route, navigation }) {
                 <Text style={styles.virtualGameBadgeText}>Virtual Game</Text>
               </View>
             )}
+            {/* Daily Win Limit Badge - shown when user already won today */}
+            {eligibilityChecked && !winEligible && !isWinner && (
+              <View style={styles.alreadyWonBadge}>
+                <Ionicons name="trophy" size={16} color="#F59E0B" />
+                <Text style={styles.alreadyWonBadgeText}>Already won today - Play for fun!</Text>
+              </View>
+            )}
           </Animated.View>
 
           {/* Location Game: Distance Display */}
@@ -1114,33 +1558,238 @@ export default function LiveGameScreen({ route, navigation }) {
             </View>
           )}
 
-          {/* Virtual Game: Play Now Section */}
-          {isVirtualGame && !isWinner && game.status === 'live' && (
-            <View style={styles.virtualGamePrompt}>
-              <Ionicons name="game-controller" size={48} color="#8B5CF6" />
-              <Text style={styles.virtualGamePromptText}>
-                {miniGameCompleted ? 'Game completed!' : 'Ready to play?'}
-              </Text>
-              <Text style={styles.virtualGamePromptSubtext}>
-                {miniGameCompleted 
-                  ? 'You can try again below' 
-                  : 'Tap the button below to start the challenge!'}
-              </Text>
-              
-              {/* Enter Game Button */}
+          {/* Virtual Game: Battle Royale Section */}
+          {isVirtualGame && game.status === 'live' && !competitionEnded && (
+            <View style={styles.battleRoyaleContainer}>
+              {/* Countdown Timer */}
+              {timeRemaining !== null && (
+                <View style={styles.countdownContainer}>
+                  <Text style={styles.countdownLabel}>Time Remaining</Text>
+                  <Text style={styles.countdownTimer}>{formatTimeRemaining(timeRemaining)}</Text>
+                </View>
+              )}
+
+              {/* Animated Podium Leaderboard */}
+              {showPodium && (
+                <Animated.View 
+                  style={[
+                    styles.podiumContainer,
+                    {
+                      opacity: podiumOpacity,
+                      transform: [{ scale: podiumScaleAnim }],
+                    }
+                  ]}
+                >
+                  <Text style={styles.podiumTitle}>🏆 Current Leaders</Text>
+                  
+                  {getSortedLeaderboard().length > 0 ? (
+                    <View style={styles.podiumStage}>
+                      {/* 2nd Place - Left */}
+                      <Animated.View 
+                        style={[
+                          styles.podiumPosition,
+                          styles.podiumSecond,
+                          {
+                            transform: [{
+                              translateY: podiumAnim2.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [100, 0],
+                              })
+                            }],
+                            opacity: podiumAnim2,
+                          }
+                        ]}
+                      >
+                        {getSortedLeaderboard()[1] ? (
+                          <>
+                            <View style={[styles.podiumAvatar, styles.podiumAvatarSecond]}>
+                              <Text style={styles.podiumAvatarText}>
+                                {getSortedLeaderboard()[1].oderId === currentUser?.uid 
+                                  ? '👤' 
+                                  : (getSortedLeaderboard()[1].username?.[0]?.toUpperCase() || '?')}
+                              </Text>
+                            </View>
+                            <Text style={styles.podiumMedal}>🥈</Text>
+                            <Text style={styles.podiumName} numberOfLines={1}>
+                              {getSortedLeaderboard()[1].oderId === currentUser?.uid 
+                                ? 'You' 
+                                : (getSortedLeaderboard()[1].username || 'Player')}
+                            </Text>
+                            <Text style={styles.podiumScore}>
+                              {formatScore(getSortedLeaderboard()[1].score, game.virtualGame?.type)}
+                            </Text>
+                            <View style={[styles.podiumBlock, styles.podiumBlockSecond]}>
+                              <Text style={styles.podiumBlockText}>2</Text>
+                            </View>
+                          </>
+                        ) : (
+                          <>
+                            <View style={[styles.podiumAvatar, styles.podiumAvatarEmpty]}>
+                              <Text style={styles.podiumAvatarText}>?</Text>
+                            </View>
+                            <Text style={styles.podiumMedal}>🥈</Text>
+                            <Text style={styles.podiumNameEmpty}>Open</Text>
+                            <View style={[styles.podiumBlock, styles.podiumBlockSecond]}>
+                              <Text style={styles.podiumBlockText}>2</Text>
+                            </View>
+                          </>
+                        )}
+                      </Animated.View>
+
+                      {/* 1st Place - Center */}
+                      <Animated.View 
+                        style={[
+                          styles.podiumPosition,
+                          styles.podiumFirst,
+                          {
+                            transform: [{
+                              translateY: podiumAnim1.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [120, 0],
+                              })
+                            }],
+                            opacity: podiumAnim1,
+                          }
+                        ]}
+                      >
+                        {getSortedLeaderboard()[0] ? (
+                          <>
+                            <View style={[styles.podiumAvatar, styles.podiumAvatarFirst]}>
+                              <Text style={styles.podiumAvatarText}>
+                                {getSortedLeaderboard()[0].oderId === currentUser?.uid 
+                                  ? '👤' 
+                                  : (getSortedLeaderboard()[0].username?.[0]?.toUpperCase() || '?')}
+                              </Text>
+                            </View>
+                            <Text style={styles.podiumCrown}>👑</Text>
+                            <Text style={styles.podiumMedal}>🥇</Text>
+                            <Text style={styles.podiumName} numberOfLines={1}>
+                              {getSortedLeaderboard()[0].oderId === currentUser?.uid 
+                                ? 'You' 
+                                : (getSortedLeaderboard()[0].username || 'Player')}
+                            </Text>
+                            <Text style={[styles.podiumScore, styles.podiumScoreFirst]}>
+                              {formatScore(getSortedLeaderboard()[0].score, game.virtualGame?.type)}
+                            </Text>
+                            <View style={[styles.podiumBlock, styles.podiumBlockFirst]}>
+                              <Text style={styles.podiumBlockText}>1</Text>
+                            </View>
+                          </>
+                        ) : (
+                          <>
+                            <View style={[styles.podiumAvatar, styles.podiumAvatarEmpty]}>
+                              <Text style={styles.podiumAvatarText}>?</Text>
+                            </View>
+                            <Text style={styles.podiumMedal}>🥇</Text>
+                            <Text style={styles.podiumNameEmpty}>Be First!</Text>
+                            <View style={[styles.podiumBlock, styles.podiumBlockFirst]}>
+                              <Text style={styles.podiumBlockText}>1</Text>
+                            </View>
+                          </>
+                        )}
+                      </Animated.View>
+
+                      {/* 3rd Place - Right */}
+                      <Animated.View 
+                        style={[
+                          styles.podiumPosition,
+                          styles.podiumThird,
+                          {
+                            transform: [{
+                              translateY: podiumAnim3.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [80, 0],
+                              })
+                            }],
+                            opacity: podiumAnim3,
+                          }
+                        ]}
+                      >
+                        {getSortedLeaderboard()[2] ? (
+                          <>
+                            <View style={[styles.podiumAvatar, styles.podiumAvatarThird]}>
+                              <Text style={styles.podiumAvatarText}>
+                                {getSortedLeaderboard()[2].oderId === currentUser?.uid 
+                                  ? '👤' 
+                                  : (getSortedLeaderboard()[2].username?.[0]?.toUpperCase() || '?')}
+                              </Text>
+                            </View>
+                            <Text style={styles.podiumMedal}>🥉</Text>
+                            <Text style={styles.podiumName} numberOfLines={1}>
+                              {getSortedLeaderboard()[2].oderId === currentUser?.uid 
+                                ? 'You' 
+                                : (getSortedLeaderboard()[2].username || 'Player')}
+                            </Text>
+                            <Text style={styles.podiumScore}>
+                              {formatScore(getSortedLeaderboard()[2].score, game.virtualGame?.type)}
+                            </Text>
+                            <View style={[styles.podiumBlock, styles.podiumBlockThird]}>
+                              <Text style={styles.podiumBlockText}>3</Text>
+                            </View>
+                          </>
+                        ) : (
+                          <>
+                            <View style={[styles.podiumAvatar, styles.podiumAvatarEmpty]}>
+                              <Text style={styles.podiumAvatarText}>?</Text>
+                            </View>
+                            <Text style={styles.podiumMedal}>🥉</Text>
+                            <Text style={styles.podiumNameEmpty}>Open</Text>
+                            <View style={[styles.podiumBlock, styles.podiumBlockThird]}>
+                              <Text style={styles.podiumBlockText}>3</Text>
+                            </View>
+                          </>
+                        )}
+                      </Animated.View>
+                    </View>
+                  ) : (
+                    <View style={styles.emptyPodiumContainer}>
+                      <Ionicons name="trophy-outline" size={48} color="#9CA3AF" />
+                      <Text style={styles.emptyPodiumText}>No scores yet!</Text>
+                      <Text style={styles.emptyPodiumSubtext}>Be the first to claim the podium</Text>
+                    </View>
+                  )}
+
+                  {/* Score to Beat for Podium */}
+                  {getSortedLeaderboard().length >= 3 && (
+                    <View style={styles.scoreToBeatPodium}>
+                      <Ionicons name="flash" size={16} color="#F59E0B" />
+                      <Text style={styles.scoreToBeatPodiumText}>
+                        Beat {formatScore(getSortedLeaderboard()[2]?.score, game.virtualGame?.type)} to reach the podium!
+                      </Text>
+                    </View>
+                  )}
+                  {getSortedLeaderboard().length > 0 && getSortedLeaderboard().length < 3 && (
+                    <View style={styles.scoreToBeatPodium}>
+                      <Ionicons name="flash" size={16} color="#10B981" />
+                      <Text style={[styles.scoreToBeatPodiumText, { color: '#10B981' }]}>
+                        Podium spots available! Play now to claim yours!
+                      </Text>
+                    </View>
+                  )}
+                </Animated.View>
+              )}
+
+              {/* User's Current Rank */}
+              {userRank && userRank > 3 && (
+                <View style={styles.userRankContainer}>
+                  <Text style={styles.userRankText}>
+                    Your Rank: #{userRank} • Best: {formatScore(userBestScore, game.virtualGame?.type)}
+                  </Text>
+                </View>
+              )}
+
+              {/* Play Button */}
               {!showMiniGame && (
                 <TouchableOpacity
                   style={styles.playNowButton}
                   onPress={() => {
                     console.log('🎮 Enter Game button pressed!');
-                    console.log('🎮 hasGameChallenge:', hasGameChallenge());
-                    console.log('🎮 getEffectiveGameType:', getEffectiveGameType());
-                    console.log('🎮 getMiniGameConfig:', getMiniGameConfig());
                     if (miniGameCompleted) {
                       setMiniGameCompleted(false);
                     }
                     setMiniGameTriggered(true);
                     setShowMiniGame(true);
+                    setShowPodium(false); // Hide podium when playing
                     if (Platform.OS !== 'web' && Haptics) {
                       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                     }
@@ -1160,6 +1809,45 @@ export default function LiveGameScreen({ route, navigation }) {
                   </LinearGradient>
                 </TouchableOpacity>
               )}
+            </View>
+          )}
+
+          {/* Virtual Game: Competition Ended */}
+          {isVirtualGame && competitionEnded && (
+            <View style={styles.competitionEndedContainer}>
+              <Ionicons name="trophy" size={64} color="#FFD700" />
+              <Text style={styles.competitionEndedTitle}>Competition Ended!</Text>
+              <Text style={styles.competitionEndedSubtitle}>
+                {userRank && userRank <= 3 
+                  ? `🎉 Congratulations! You finished #${userRank}!`
+                  : userRank 
+                    ? `You finished #${userRank}`
+                    : 'Thanks for playing!'}
+              </Text>
+              
+              {/* Final Leaderboard */}
+              <View style={styles.finalLeaderboard}>
+                <Text style={styles.finalLeaderboardTitle}>Final Results</Text>
+                {getSortedLeaderboard().slice(0, 5).map((entry, index) => (
+                  <View 
+                    key={entry.oderId} 
+                    style={[
+                      styles.leaderboardEntry,
+                      entry.oderId === currentUser?.uid && styles.leaderboardEntryHighlight
+                    ]}
+                  >
+                    <Text style={styles.leaderboardRank}>
+                      {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
+                    </Text>
+                    <Text style={styles.leaderboardName} numberOfLines={1}>
+                      {entry.oderId === currentUser?.uid ? 'You' : (entry.username || `Player ${entry.oderId?.slice(0, 6)}`)}
+                    </Text>
+                    <Text style={styles.leaderboardScore}>
+                      {formatScore(entry.score, game.virtualGame?.type)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
           )}
 
@@ -1212,10 +1900,12 @@ export default function LiveGameScreen({ route, navigation }) {
           )}
 
 
-          {/* Winners Count */}
-          <Text style={styles.winnersCount}>
-            {game.winners?.length || 0} / {game.winnerSlots || 3} Winners
-          </Text>
+          {/* Winners Count - only show for location games */}
+          {!isVirtualGame && (
+            <Text style={styles.winnersCount}>
+              {game.winners?.length || 0} / {game.winnerSlots || 3} Winners
+            </Text>
+          )}
         </View>
       ) : (
         /* Leaderboard View */
@@ -1346,6 +2036,40 @@ export default function LiveGameScreen({ route, navigation }) {
           gameConfig={getMiniGameConfig()}
           onComplete={handleMiniGameComplete}
           onClose={handleMiniGameClose}
+        />
+      )}
+
+      {/* Score to Beat Overlay - shows during Battle Royale gameplay */}
+      {isVirtualGame && showMiniGame && getSortedLeaderboard().length >= 3 && (
+        <View style={styles.scoreToBeatOverlay}>
+          <LinearGradient
+            colors={['rgba(139, 92, 246, 0.95)', 'rgba(99, 102, 241, 0.95)']}
+            style={styles.scoreToBeatOverlayGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
+            <Ionicons name="podium" size={16} color="#FFFFFF" />
+            <Text style={styles.scoreToBeatOverlayText}>
+              Beat {formatScore(getSortedLeaderboard()[2]?.score, game?.virtualGame?.type)} for podium!
+            </Text>
+          </LinearGradient>
+        </View>
+      )}
+
+      {/* Winner Card Screen - shows after winning */}
+      {showWinnerCard && winnerCardData && (
+        <WinnerCardScreen
+          visible={showWinnerCard}
+          onClose={() => {
+            setShowWinnerCard(false);
+            setWinnerCardData(null);
+          }}
+          gameName={winnerCardData.gameName}
+          prizeAmount={winnerCardData.prizeAmount}
+          position={winnerCardData.position}
+          score={winnerCardData.score}
+          gameType={winnerCardData.gameType}
+          isTopThree={winnerCardData.position <= 3}
         />
       )}
     </LinearGradient>
@@ -1549,6 +2273,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#8B5CF6',
   },
+  alreadyWonBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginTop: 8,
+    gap: 6,
+  },
+  alreadyWonBadgeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F59E0B',
+  },
   virtualGamePrompt: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1587,6 +2326,330 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  // Battle Royale styles
+  battleRoyaleContainer: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    width: '100%',
+  },
+  countdownContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 16,
+  },
+  countdownLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8B5CF6',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  countdownTimer: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    fontVariant: ['tabular-nums'],
+  },
+  // Podium styles
+  podiumContainer: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  podiumTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  podiumStage: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingHorizontal: 8,
+    minHeight: 220,
+  },
+  podiumPosition: {
+    alignItems: 'center',
+    flex: 1,
+    maxWidth: 110,
+  },
+  podiumFirst: {
+    marginHorizontal: 4,
+  },
+  podiumSecond: {
+    marginRight: 4,
+  },
+  podiumThird: {
+    marginLeft: 4,
+  },
+  podiumAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+    borderWidth: 3,
+  },
+  podiumAvatarFirst: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
+  podiumAvatarSecond: {
+    backgroundColor: '#E5E7EB',
+    borderColor: '#9CA3AF',
+  },
+  podiumAvatarThird: {
+    backgroundColor: '#FED7AA',
+    borderColor: '#EA580C',
+  },
+  podiumAvatarEmpty: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#D1D5DB',
+    borderStyle: 'dashed',
+  },
+  podiumAvatarText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  podiumCrown: {
+    fontSize: 24,
+    position: 'absolute',
+    top: -20,
+  },
+  podiumMedal: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  podiumName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1A1A2E',
+    textAlign: 'center',
+    marginBottom: 2,
+    maxWidth: 80,
+  },
+  podiumNameEmpty: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    marginBottom: 2,
+  },
+  podiumScore: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#8B5CF6',
+    marginBottom: 8,
+  },
+  podiumScoreFirst: {
+    fontSize: 13,
+    color: '#F59E0B',
+  },
+  podiumBlock: {
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
+  podiumBlockFirst: {
+    height: 80,
+    backgroundColor: '#F59E0B',
+  },
+  podiumBlockSecond: {
+    height: 60,
+    backgroundColor: '#9CA3AF',
+  },
+  podiumBlockThird: {
+    height: 45,
+    backgroundColor: '#EA580C',
+  },
+  podiumBlockText: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  emptyPodiumContainer: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyPodiumText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#6B7280',
+    marginTop: 12,
+  },
+  emptyPodiumSubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+  scoreToBeatPodium: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 12,
+    gap: 8,
+  },
+  scoreToBeatPodiumText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  // Score to beat overlay (during gameplay)
+  scoreToBeatOverlay: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    zIndex: 1000,
+    alignItems: 'center',
+  },
+  scoreToBeatOverlayGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  scoreToBeatOverlayText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  leaderboardPreview: {
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  leaderboardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  leaderboardEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  leaderboardEntryHighlight: {
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    borderWidth: 2,
+    borderColor: '#8B5CF6',
+  },
+  leaderboardRank: {
+    fontSize: 20,
+    width: 36,
+  },
+  leaderboardName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1A1A2E',
+    marginLeft: 8,
+  },
+  leaderboardScore: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#8B5CF6',
+  },
+  noLeaderboardText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    paddingVertical: 20,
+  },
+  userRankContainer: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  userRankText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#8B5CF6',
+  },
+  scoreToBeatContainer: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  scoreToBeatText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#F59E0B',
+  },
+  competitionEndedContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    width: '100%',
+  },
+  competitionEndedTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    marginTop: 16,
+  },
+  competitionEndedSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  finalLeaderboard: {
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 24,
+  },
+  finalLeaderboardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    marginBottom: 16,
+    textAlign: 'center',
   },
   leaderboardContainer: {
     flex: 1,

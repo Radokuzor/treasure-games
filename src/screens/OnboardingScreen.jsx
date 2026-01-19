@@ -399,7 +399,7 @@ const OnboardingScreen = ({ navigation }) => {
           />
           <Text style={styles.heroTitle}>Become A Winner</Text>
           <Text style={styles.heroSubtitle}>
-            Quick, competitive hunts with real prizes — built for students.
+            Quick, competitive games with real prizes — built for winners.
           </Text>
 
           <View style={styles.statsRow}>
@@ -420,7 +420,7 @@ const OnboardingScreen = ({ navigation }) => {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={styles.primaryButtonText}>Start Hunting</Text>
+              <Text style={styles.primaryButtonText}>Start Playing</Text>
               <Ionicons name="arrow-forward" size={24} color="#FFF" />
             </LinearGradient>
           </TouchableOpacity>
@@ -483,7 +483,7 @@ const OnboardingScreen = ({ navigation }) => {
 
           <Text style={styles.stepTitle}>Move Fast</Text>
           <Text style={styles.stepDescription}>
-            Quickly get to the location and be among hundreds of winners daily.
+            Quickly get to the location or open the virtual game and be among hundreds of winners daily.
           </Text>
 
           <TouchableOpacity onPress={nextSlide} style={styles.nextButton}>
@@ -516,7 +516,7 @@ const OnboardingScreen = ({ navigation }) => {
 
           <Text style={styles.stepTitle}>Claim The Win</Text>
           <Text style={styles.stepDescription}>
-            Win big and cover your next grocery bill or gas bill.
+            Win big and finnally get those shoes on you shein temu or amazon cartcart 👀... its ok we dont judge
           </Text>
 
           <TouchableOpacity onPress={nextSlide} style={styles.nextButton}>
@@ -538,7 +538,7 @@ const OnboardingScreen = ({ navigation }) => {
             { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
           ]}
         >
-          <Text style={styles.slideTitle}>Extra Cash For You Next Temu/Amazon Shopping</Text>
+          <Text style={styles.slideTitle}>Join the Winners Club</Text>
 
           <View style={styles.testimonialCard}>
             <View style={styles.testimonialHeader}>

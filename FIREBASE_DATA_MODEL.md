@@ -100,7 +100,55 @@ Stores all game information including location-based and virtual games.
     }
   },
 
-  // Virtual Game Specific Fields
+  // Virtual Game Specific Fields (New Battle Royale System)
+  virtualGame?: {
+    type: 'tap_count' | 'hold_duration' | 'rhythm_tap' | 'custom',
+    config: {
+      // For tap_count:
+      targetTaps?: number,          // Target taps to complete (default: 100)
+      timeLimit?: number,           // Time limit in seconds (default: 30)
+      // For hold_duration:
+      holdDuration?: number,        // Required hold time in ms (default: 5000)
+      // For rhythm_tap:
+      bpm?: number,                 // Beats per minute (default: 120)
+      requiredBeats?: number,       // Number of beats (default: 10)
+      toleranceMs?: number,         // Timing tolerance in ms (default: 150)
+      requiredScore?: number,       // Required accuracy percentage (default: 70)
+    },
+    customGameUrl?: string,         // URL to custom HTML game (for 'custom' type)
+    // Battle Royale Settings
+    duration?: number,              // Competition duration in ms
+    endsAt?: Timestamp,             // When competition ends (set when game goes live)
+    prizeDistribution?: {           // Prize % for each position
+      1: number,                    // 1st place % (default: 100)
+      2: number,                    // 2nd place % (default: 60)
+      3: number,                    // 3rd place % (default: 30)
+    },
+  },
+  
+  // Battle Royale Leaderboard
+  leaderboard?: Array<{
+    oderId: string,                 // User ID
+    username: string,               // Display name
+    score: number,                  // Best score (lower is better for tap_count, higher for others)
+    oderdAt: Timestamp,             // When best score was achieved
+    attempts: number,               // Total attempts by this user
+  }>,
+  
+  // Battle Royale Winners (set when competition ends)
+  battleRoyaleWinners?: Array<{
+    oderId: string,
+    username: string,
+    position: number,               // 1, 2, or 3
+    score: number,
+    prizeAmount: number,            // Calculated prize amount
+    prizePercent: number,           // Prize percentage
+    claimDeadline: Timestamp,       // 30 minutes after competition ends
+    claimed: boolean,
+    notifiedAt: Timestamp,
+  }>,
+
+  // Legacy fields (for backwards compatibility)
   virtualType?: 'tap',              // Type of virtual game
   targetTaps?: number,              // For tap games: target number of taps (default: 1000)
 }
@@ -227,6 +275,22 @@ Stores user profile and authentication information.
   gamesPlayed?: number,
   gamesWon?: number,
   totalEarnings?: number,
+  
+  // Daily win limit tracking
+  totalWins?: number,                 // Total lifetime wins
+  lastWinDate?: string,               // YYYY-MM-DD of last win
+  lastWinGameName?: string,           // Name of last won game
+  
+  // Battle Royale pending winnings
+  pendingWinnings?: number,           // Unclaimed prize amount
+  lastBattleRoyaleWin?: {
+    gameId: string,
+    gameName: string,
+    position: number,                 // 1, 2, or 3
+    prizeAmount: number,
+    claimDeadline: Timestamp,         // 30 min after competition ends
+    claimed: boolean,
+  },
 }
 ```
 

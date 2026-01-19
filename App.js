@@ -14,6 +14,7 @@ import AdminScreen from './src/screens/AdminScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import CommunityScreen from './src/screens/CommunityScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
+import FeatureUpdatesScreen from './src/screens/FeatureUpdatesScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import HowToPlayScreen from './src/screens/HowToPlayScreen';
 import LiveGameScreen from './src/screens/LiveGameScreen';
@@ -32,15 +33,18 @@ const LoadingScreen = () => (
   </View>
 );
 
-// Tab Navigator Component
-const TabNavigator = () => {
+// Tab Navigator Component with Feature Updates
+const TabNavigator = ({ route }) => {
   const { theme } = useTheme();
+  const [showFeatureUpdates, setShowFeatureUpdates] = useState(true);
+  const userId = route?.params?.userId;
 
   // Determine if we're using a light theme
   const isLightTheme = theme.colors.text === '#1A1A2E';
 
   return (
-    <Tab.Navigator
+    <>
+      <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
@@ -116,6 +120,15 @@ const TabNavigator = () => {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
+    
+    {/* Feature Updates Overlay */}
+    {showFeatureUpdates && (
+      <FeatureUpdatesScreen
+        userId={userId}
+        onComplete={() => setShowFeatureUpdates(false)}
+      />
+    )}
+    </>
   );
 };
 
@@ -259,7 +272,11 @@ export default function App() {
               <Stack.Screen name="Onboarding" component={OnboardingScreen} />
             ) : null}
             <Stack.Screen name="Auth" component={AuthScreen} />
-            <Stack.Screen name="MainTabs" component={TabNavigator} />
+            <Stack.Screen 
+              name="MainTabs" 
+              component={TabNavigator}
+              initialParams={{ userId: user?.uid }}
+            />
             <Stack.Screen name="Admin" component={AdminScreen} />
             <Stack.Screen name="AdminMediaUpload" component={AdminMediaUploadScreen} />
             <Stack.Screen name="HowToPlay" component={HowToPlayScreen} />

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Treasure",
     "slug": "HoodGames",
-    "version": "1.0.4",
+    "version": "1.0.7",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "hoodgames",
@@ -10,12 +10,13 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "8",
+      "buildNumber": "10",
       "infoPlist": {
         "CFBundleDisplayName": "Treasure",
         "NSLocationWhenInUseUsageDescription": "Treasure Island Games uses your location to help you find treasure hunts nearby.",
-        "NSCameraUsageDescription": "Treasure Island uses the camera to upload profile pictures and videos.",
-        "NSPhotoLibraryUsageDescription": "Treasure Island needs access to your photos to set your profile picture.",
+        "NSCameraUsageDescription": "Treasure Island needs camera access to take your winner selfie for the Winner Card and upload profile pictures.",
+        "NSPhotoLibraryUsageDescription": "Treasure Island needs access to your photos to set your profile picture and save your Winner Card.",
+        "NSPhotoLibraryAddUsageDescription": "Treasure Island needs permission to save your Winner Card to your photo library.",
         "NSMicrophoneUsageDescription": "Treasure Island uses the microphone for video content.",
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -23,7 +24,7 @@
       "appleTeamId": "F2B5QD97WH"
     },
     "android": {
-      "versionCode": 8,
+      "versionCode": 11,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -66,6 +67,14 @@
     "plugins": [
       "expo-router",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Treasure Island needs camera access to take your winner selfie for the Winner Card.",
+          "microphonePermission": "Treasure Island needs microphone access for video content.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "HoodGames needs access to your photos to set your profile picture."
@@ -75,6 +84,14 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "HoodGames needs your location to show nearby treasure hunts."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Treasure Island needs access to your photos to save your Winner Card.",
+          "savePhotosPermission": "Treasure Island needs permission to save your Winner Card to your photo library.",
+          "isAccessMediaLocationEnabled": true
         }
       ],
       [

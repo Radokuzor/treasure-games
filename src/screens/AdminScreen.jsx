@@ -4,9 +4,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,14 +23,14 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
-  where,
+  updateDoc
 } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { GradientBackground, GradientCard } from '../components/GradientComponents';
@@ -60,7 +62,7 @@ const AdminScreen = ({ navigation }) => {
   // Form states
   const [gameType, setGameType] = useState('location');
   const [gameName, setGameName] = useState('');
-  const [prizeAmount, setPrizeAmount] = useState('');
+  const [prizeAmount, setPrizeAmount] = useState('10'); // Default $10
   const [description, setDescription] = useState('');
   const [city, setCity] = useState('');
   const [selectedLocation, setSelectedLocation] = useState(null);
@@ -80,6 +82,59 @@ const AdminScreen = ({ navigation }) => {
   const [virtualToleranceMs, setVirtualToleranceMs] = useState('150');
   const [customVirtualGameFile, setCustomVirtualGameFile] = useState(null);
   const [customVirtualGameFileName, setCustomVirtualGameFileName] = useState('');
+  
+  // Battle Royale settings for virtual games
+  const [competitionDuration, setCompetitionDuration] = useState('30'); // Duration in minutes
+  const [prize1stPercent, setPrize1stPercent] = useState('100');
+  const [prize2ndPercent, setPrize2ndPercent] = useState('60');
+  const [prize3rdPercent, setPrize3rdPercent] = useState('30');
+
+  // Dropdown modal states
+  const [showCityPicker, setShowCityPicker] = useState(false);
+  const [showDurationPicker, setShowDurationPicker] = useState(false);
+
+  // Duration options for dropdown
+  const DURATION_OPTIONS = [
+    { label: '15 minutes', value: '15' },
+    { label: '30 minutes', value: '30' },
+    { label: '1 hour', value: '60' },
+    { label: '2 hours', value: '120' },
+    { label: '3 hours', value: '180' },
+    { label: '6 hours', value: '360' },
+    { label: '12 hours', value: '720' },
+    { label: '24 hours', value: '1440' },
+  ];
+
+  // City options for dropdown
+  const CITY_OPTIONS = [
+    { label: 'Select a city...', value: '' },
+    { label: 'Atlanta', value: 'Atlanta' },
+    { label: 'Austin', value: 'Austin' },
+    { label: 'Boston', value: 'Boston' },
+    { label: 'Charlotte', value: 'Charlotte' },
+    { label: 'Chicago', value: 'Chicago' },
+    { label: 'Dallas', value: 'Dallas' },
+    { label: 'Denver', value: 'Denver' },
+    { label: 'Detroit', value: 'Detroit' },
+    { label: 'Houston', value: 'Houston' },
+    { label: 'Las Vegas', value: 'Las Vegas' },
+    { label: 'Los Angeles', value: 'Los Angeles' },
+    { label: 'Miami', value: 'Miami' },
+    { label: 'Minneapolis', value: 'Minneapolis' },
+    { label: 'Nashville', value: 'Nashville' },
+    { label: 'New Orleans', value: 'New Orleans' },
+    { label: 'New York', value: 'New York' },
+    { label: 'Orlando', value: 'Orlando' },
+    { label: 'Philadelphia', value: 'Philadelphia' },
+    { label: 'Phoenix', value: 'Phoenix' },
+    { label: 'Portland', value: 'Portland' },
+    { label: 'San Antonio', value: 'San Antonio' },
+    { label: 'San Diego', value: 'San Diego' },
+    { label: 'San Francisco', value: 'San Francisco' },
+    { label: 'Seattle', value: 'Seattle' },
+    { label: 'Tampa', value: 'Tampa' },
+    { label: 'Washington DC', value: 'Washington DC' },
+  ];
   
   // Legacy - keeping for backwards compatibility
   const [targetTaps, setTargetTaps] = useState('1000');
@@ -103,6 +158,7 @@ const AdminScreen = ({ navigation }) => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [redemptions, setRedemptions] = useState([]);
   const [loadingRedemptions, setLoadingRedemptions] = useState(true);
+  const [userDetailsCache, setUserDetailsCache] = useState({}); // Cache for user details by ID
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -206,36 +262,212 @@ const AdminScreen = ({ navigation }) => {
 
   const pendingRedemptions = redemptions.filter((r) => r?.status === 'requested');
 
+  // Fetch user details by ID (with caching)
+  const fetchUserDetails = async (userId) => {
+    if (!userId) return null;
+    
+    // Check cache first
+    if (userDetailsCache[userId]) {
+      return userDetailsCache[userId];
+    }
+
+    try {
+      const db = getDb();
+      if (!db) return null;
+
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        
+        // Build display name from firstName and lastName
+        const firstName = userData.firstName || '';
+        const lastName = userData.lastName || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        
+        const details = {
+          displayName: fullName || userData.displayName || userData.name || userData.username || 'Unknown',
+          firstName: firstName || 'N/A',
+          lastName: lastName || 'N/A',
+          email: userData.email || 'No email',
+          phone: userData.phone || 'No phone',
+          pushToken: userData.pushToken || null,
+          city: userData.city || 'N/A',
+        };
+        
+        // Update cache
+        setUserDetailsCache(prev => ({ ...prev, [userId]: details }));
+        return details;
+      }
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+    }
+    return null;
+  };
+
+  // Fetch user details for all redemptions
+  useEffect(() => {
+    const fetchAllUserDetails = async () => {
+      for (const redemption of redemptions) {
+        if (redemption.userId && !userDetailsCache[redemption.userId]) {
+          await fetchUserDetails(redemption.userId);
+        }
+      }
+    };
+    
+    if (redemptions.length > 0) {
+      fetchAllUserDetails();
+    }
+  }, [redemptions]);
+
+  // Show winners details for a game
+  const showWinnersDetails = async (game) => {
+    if (!game.winners || game.winners.length === 0) {
+      Alert.alert('No Winners', 'This game has no winners yet.');
+      return;
+    }
+
+    // Fetch details for all winners
+    const winnerDetails = await Promise.all(
+      game.winners.map(async (winner) => {
+        const oderId = winner.oderId || winner.userId;
+        console.log('Fetching details for winner:', oderId);
+        const details = await fetchUserDetails(oderId);
+        console.log('Got details:', details);
+        return {
+          ...winner,
+          oderId,
+          firstName: details?.firstName || 'N/A',
+          lastName: details?.lastName || 'N/A',
+          displayName: details?.displayName || 'Unknown',
+          email: details?.email || 'No email',
+          phone: details?.phone || 'No phone',
+          city: details?.city || 'N/A',
+        };
+      })
+    );
+
+    // Build the message with full details
+    const winnersText = winnerDetails.map((w, index) => {
+      const position = w.position || index + 1;
+      const prize = game.virtualGame?.prizeDistribution?.[position] 
+        ? `$${Math.round((game.prizeAmount || 0) * game.virtualGame.prizeDistribution[position] / 100)}`
+        : `$${game.prizeAmount || 0}`;
+      return `🏅 #${position} Winner\n` +
+        `👤 ${w.firstName} ${w.lastName}\n` +
+        `📧 ${w.email}\n` +
+        `📱 ${w.phone}\n` +
+        `🏙️ ${w.city}\n` +
+        `💰 Prize: ${prize}`;
+    }).join('\n\n─────────────\n\n');
+
+    Alert.alert(
+      `🏆 Winners - ${game.name}`,
+      winnersText,
+      [{ text: 'OK', style: 'default' }]
+    );
+  };
+
+  // Send push notification to a specific user
+  const sendPushNotification = async (pushToken, title, body) => {
+    if (!pushToken) {
+      console.log('No push token available for user');
+      return false;
+    }
+
+    try {
+      const message = {
+        to: pushToken,
+        sound: 'default',
+        title,
+        body,
+        data: { type: 'redemption_fulfilled' },
+      };
+
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Accept-encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(message),
+      });
+
+      const result = await response.json();
+      console.log('Push notification result:', result);
+      return true;
+    } catch (error) {
+      console.error('Error sending push notification:', error);
+      return false;
+    }
+  };
+
   const formatRedemptionTime = (createdAt) => {
     const date = createdAt?.toDate?.() ?? null;
     if (!date) return '';
     return date.toLocaleString();
   };
 
-  const handleFulfillRedemption = (redemption) => {
+  const handleFulfillRedemption = async (redemption) => {
     if (!hasFirebaseConfig) return;
 
     const db = getDb();
     if (!db) return;
 
+    // Fetch user details
+    const userDetails = await fetchUserDetails(redemption.userId);
+    const userFirstName = userDetails?.firstName || 'N/A';
+    const userLastName = userDetails?.lastName || 'N/A';
+    const userEmail = userDetails?.email || 'No email provided';
+    const userPhone = userDetails?.phone || 'No phone provided';
+    const userCity = userDetails?.city || 'No city';
+    const pushToken = userDetails?.pushToken;
+
+    const methodName = redemption.method === 'visa' ? 'Visa Gift Card' : 'Amazon e‑Gift Card';
+    const amount = Number(redemption.amount || 0).toFixed(2);
+    const socialLink = redemption.socialMediaLink || 'Not provided';
+
     Alert.alert(
-      'Mark Fulfilled?',
-      `Mark ${redemption.method === 'visa' ? 'Visa' : 'Amazon'} request for $${Number(
-        redemption.amount || 0
-      ).toFixed(2)} as fulfilled?`,
+      '📋 Redemption Details',
+      `${methodName} - $${amount}\n\n` +
+      `👤 First Name: ${userFirstName}\n` +
+      `👤 Last Name: ${userLastName}\n` +
+      `📧 Email: ${userEmail}\n` +
+      `📱 Phone: ${userPhone}\n` +
+      `🏙️ City: ${userCity}\n` +
+      `🔗 Social Post: ${socialLink}\n\n` +
+      `Has this request been fulfilled?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Fulfilled',
+          text: 'Yes, Mark Fulfilled',
           style: 'default',
           onPress: async () => {
             try {
+              // Update redemption status
               await updateDoc(doc(db, 'redemptions', redemption.id), {
                 status: 'fulfilled',
                 fulfilledAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
               });
-              Alert.alert('Updated', 'Redemption marked as fulfilled.');
+
+              // Send notification to user
+              if (pushToken) {
+                await sendPushNotification(
+                  pushToken,
+                  '🎉 Your Reward Has Been Sent!',
+                  `Your ${methodName} for $${amount} has been fulfilled! If you have any questions, please email admin@fourthwatchtech.com`
+                );
+                Alert.alert(
+                  'Success!', 
+                  `Redemption marked as fulfilled and notification sent to ${userFirstName} ${userLastName}.`
+                );
+              } else {
+                Alert.alert(
+                  'Fulfilled', 
+                  `Redemption marked as fulfilled.\n\nNote: Could not send notification - user has no push token.\n\nUser email: ${userEmail}`
+                );
+              }
             } catch (error) {
               Alert.alert('Error', error?.message ?? 'Failed to update redemption.');
             }
@@ -331,6 +563,41 @@ const AdminScreen = ({ navigation }) => {
     }
   };
 
+  // Delete a game
+  const handleDeleteGame = async (game) => {
+    if (!hasFirebaseConfig) return;
+
+    // Confirm deletion
+    Alert.alert(
+      'Delete Game',
+      `Are you sure you want to delete "${game.name}"? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const db = getDb();
+              if (!db) return;
+
+              await deleteDoc(doc(db, 'games', game.id));
+              
+              Alert.alert('Success', `"${game.name}" has been deleted.`);
+              console.log('🗑️ Game deleted:', game.id);
+            } catch (error) {
+              console.error('Delete game error:', error);
+              Alert.alert('Error', 'Failed to delete game. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const sendExpoPushNotifications = async (messages) => {
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
@@ -358,7 +625,7 @@ const AdminScreen = ({ navigation }) => {
 
   const resetForm = () => {
     setGameName('');
-    setPrizeAmount('');
+    setPrizeAmount('10'); // Reset to default $10
     setDescription('');
     setCity('');
     setSelectedLocation(null);
@@ -377,6 +644,11 @@ const AdminScreen = ({ navigation }) => {
     setVirtualToleranceMs('150');
     setCustomVirtualGameFile(null);
     setCustomVirtualGameFileName('');
+    // Reset battle royale settings
+    setCompetitionDuration('30');
+    setPrize1stPercent('100');
+    setPrize2ndPercent('60');
+    setPrize3rdPercent('30');
     // Reset mini-game settings
     setMiniGameType('none');
     setMiniGameTargetTaps('100');
@@ -624,9 +896,18 @@ const AdminScreen = ({ navigation }) => {
 
       // Virtual game specific fields
       if (gameType === 'virtual') {
+        const durationMs = Number(competitionDuration) * 60 * 1000; // Convert minutes to ms
+        
         gameData.virtualGame = {
           type: virtualGameType,
           config: {},
+          // Battle Royale settings
+          duration: durationMs,
+          prizeDistribution: {
+            1: Number(prize1stPercent) || 100,
+            2: Number(prize2ndPercent) || 60,
+            3: Number(prize3rdPercent) || 30,
+          },
         };
 
         switch (virtualGameType) {
@@ -653,7 +934,10 @@ const AdminScreen = ({ navigation }) => {
             // Custom game URL will be added after upload
             break;
         }
-        
+
+        // Initialize empty leaderboard
+        gameData.leaderboard = [];
+
         // Legacy field for backwards compatibility
         gameData.virtualType = virtualGameType;
         if (virtualGameType === 'tap_count') {
@@ -749,6 +1033,63 @@ const AdminScreen = ({ navigation }) => {
     }
   };
 
+  // Check notification stats - helpful for debugging
+  const checkNotificationStats = async () => {
+    if (!hasFirebaseConfig) return;
+
+    const db = getDb();
+    if (!db) return;
+
+    try {
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      
+      let totalUsers = 0;
+      let usersWithTokens = 0;
+      let usersWithCity = 0;
+      const cityCounts = {};
+
+      usersSnapshot.docs.forEach((docSnap) => {
+        totalUsers++;
+        const userData = docSnap.data();
+        
+        if (userData?.pushToken) {
+          usersWithTokens++;
+        }
+        
+        if (userData?.city) {
+          usersWithCity++;
+          const cityLower = userData.city.toLowerCase().trim();
+          cityCounts[cityLower] = (cityCounts[cityLower] || 0) + 1;
+        }
+      });
+
+      const topCities = Object.entries(cityCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([city, count]) => `${city}: ${count}`)
+        .join('\n');
+
+      Alert.alert(
+        '📊 Notification Stats',
+        `Total Users: ${totalUsers}\n` +
+        `Users with Push Tokens: ${usersWithTokens}\n` +
+        `Users with City Set: ${usersWithCity}\n\n` +
+        `Top Cities:\n${topCities || 'No cities found'}`,
+        [{ text: 'OK' }]
+      );
+
+      console.log('📊 Notification Stats:', {
+        totalUsers,
+        usersWithTokens,
+        usersWithCity,
+        cityCounts,
+      });
+    } catch (error) {
+      console.error('Error checking notification stats:', error);
+      Alert.alert('Error', 'Failed to check notification stats.');
+    }
+  };
+
   const handleLaunchGame = async (game) => {
     if (!hasFirebaseConfig) return;
 
@@ -756,44 +1097,79 @@ const AdminScreen = ({ navigation }) => {
     if (!db) return;
 
     try {
+      // For virtual games or games without a city, notify all users
+      const isVirtualOrNoCity = game.type === 'virtual' || !game.city;
+      const targetAudience = isVirtualOrNoCity ? 'all players' : `players in ${game.city}`;
+
       Alert.alert(
         'Launch Game?',
-        `Launch "${game.name}" and notify all players in ${game.city || 'all cities'}?`,
+        `Launch "${game.name}" and notify ${targetAudience}?`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Launch',
             style: 'default',
             onPress: async () => {
-              await updateDoc(doc(db, 'games', game.id), {
+              // Prepare update data
+              const updateData = {
                 status: 'live',
                 launchedAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
-              });
+              };
 
-              // Send notifications
-              const usersQuery = game.city
-                ? query(collection(db, 'users'), where('city', '==', game.city))
-                : query(collection(db, 'users'));
+              // For virtual games, calculate and set the end time
+              if (game.type === 'virtual' && game.virtualGame?.duration) {
+                const durationMs = game.virtualGame.duration;
+                const endsAt = new Date(Date.now() + durationMs);
+                updateData['virtualGame.endsAt'] = endsAt;
+                console.log('⏱️ Virtual game will end at:', endsAt.toLocaleString());
+              }
 
-              const usersSnapshot = await getDocs(usersQuery);
-              console.log('📊 Total users found in database:', usersSnapshot.docs.length);
-              console.log('🔍 Querying for city:', game.city || 'all cities');
+              await updateDoc(doc(db, 'games', game.id), updateData);
 
+              // Get ALL users first, then filter
+              const usersSnapshot = await getDocs(collection(db, 'users'));
+              console.log('📊 Total users in database:', usersSnapshot.docs.length);
+              console.log('🔍 Game type:', game.type);
+              console.log('🔍 Game city:', game.city || 'none');
+
+              // Filter users based on game type and city
               const tokens = usersSnapshot.docs
                 .map((docSnap) => {
                   const userData = docSnap.data();
                   const token = userData?.pushToken;
+                  const userCity = userData?.city?.toLowerCase?.()?.trim?.() || '';
+                  const gameCity = game.city?.toLowerCase?.()?.trim?.() || '';
+                  
+                  // Log each user for debugging
                   console.log(`User ${docSnap.id}:`, {
                     hasToken: !!token,
-                    tokenLength: token?.length || 0,
-                    city: userData?.city || 'no city',
+                    tokenPreview: token ? token.substring(0, 20) + '...' : 'none',
+                    userCity: userCity || 'no city',
+                    gameCity: gameCity || 'no city (all users)',
                   });
-                  return token;
+
+                  // For virtual games or games without city, include all users with tokens
+                  if (isVirtualOrNoCity) {
+                    return token;
+                  }
+
+                  // For location games with a city, match city (case-insensitive)
+                  if (userCity && gameCity && userCity === gameCity) {
+                    return token;
+                  }
+
+                  // Also include users without a city set (they should get all notifications)
+                  if (!userCity && token) {
+                    console.log(`  → Including user without city: ${docSnap.id}`);
+                    return token;
+                  }
+
+                  return null;
                 })
                 .filter((token) => typeof token === 'string' && token.length > 0);
 
-              console.log('✅ Valid push tokens collected:', tokens.length);
+              console.log('✅ Valid push tokens to notify:', tokens.length);
 
               if (tokens.length > 0) {
                 const notifications = tokens.map((token) => ({
@@ -811,13 +1187,17 @@ const AdminScreen = ({ navigation }) => {
 
                 Alert.alert('Game Launched!', `Notified ${tokens.length} players.`);
               } else {
-                Alert.alert('Game Launched!', 'No players to notify.');
+                Alert.alert(
+                  'Game Launched!', 
+                  'No players to notify.\n\nThis could mean:\n• No users have push tokens\n• Users haven\'t enabled notifications\n• Check console logs for details'
+                );
               }
             },
           },
         ]
       );
     } catch (error) {
+      console.error('Launch game error:', error);
       Alert.alert('Error', error?.message ?? 'Failed to launch game.');
     }
   };
@@ -952,17 +1332,47 @@ const AdminScreen = ({ navigation }) => {
             </Text>
           ) : null}
 
-          {pendingRedemptions.map((redemption) => (
+          {pendingRedemptions.map((redemption) => {
+            const userInfo = userDetailsCache[redemption.userId];
+            return (
             <View key={redemption.id} style={styles.redemptionRow}>
               <View style={styles.redemptionInfo}>
                 <Text style={[styles.redemptionTitle, { color: theme.colors.text }]}>
                   {redemption.method === 'visa' ? 'Visa Gift Card' : 'Amazon e‑Gift Card'} • $
                   {Number(redemption.amount || 0).toFixed(2)}
                 </Text>
+                <Text style={[styles.redemptionUserName, { color: theme.colors.text }]}>
+                  👤 {userInfo ? `${userInfo.firstName} ${userInfo.lastName}` : 'Loading...'}
+                </Text>
                 <Text style={[styles.redemptionMeta, { color: theme.colors.textSecondary }]}>
-                  User: {String(redemption.userId || '').slice(0, 10)}
+                  📧 {userInfo?.email || 'Loading...'}
+                </Text>
+                <Text style={[styles.redemptionMeta, { color: theme.colors.textSecondary }]}>
+                  📱 {userInfo?.phone || 'No phone'}
+                </Text>
+                <Text style={[styles.redemptionMeta, { color: theme.colors.textSecondary }]}>
+                  🏙️ {userInfo?.city || 'No city'}
+                </Text>
+                {redemption.socialMediaLink && (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      if (Platform.OS === 'web') {
+                        window.open(redemption.socialMediaLink, '_blank');
+                      } else {
+                        import('react-native').then(({ Linking }) => {
+                          Linking.openURL(redemption.socialMediaLink);
+                        });
+                      }
+                    }}
+                    style={styles.socialLinkButton}
+                  >
+                    <Ionicons name="link" size={14} color="#8B5CF6" />
+                    <Text style={styles.socialLinkText}>View Social Post</Text>
+                  </TouchableOpacity>
+                )}
+                <Text style={[styles.redemptionMeta, { color: theme.colors.textSecondary, marginTop: 4 }]}>
                   {formatRedemptionTime(redemption.createdAt)
-                    ? ` • ${formatRedemptionTime(redemption.createdAt)}`
+                    ? `Requested: ${formatRedemptionTime(redemption.createdAt)}`
                     : ''}
                 </Text>
               </View>
@@ -999,7 +1409,8 @@ const AdminScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
             </View>
-          ))}
+          );
+          })}
         </GradientCard>
 
 	        {/* Home Media Upload Button */}
@@ -1143,16 +1554,16 @@ const AdminScreen = ({ navigation }) => {
             <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
               City {gameType === 'location' ? '*' : '(Optional)'}
             </Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="location-outline" size={20} color={theme.colors.textSecondary} />
-              <TextInput
-                style={[styles.input, { color: theme.colors.text }]}
-                placeholder="San Francisco"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={city}
-                onChangeText={setCity}
-              />
-            </View>
+            <TouchableOpacity
+              onPress={() => setShowCityPicker(true)}
+              activeOpacity={0.85}
+              style={styles.selectInput}
+            >
+              <Text style={[styles.selectText, !city && styles.selectPlaceholder]}>
+                {city || 'Select a city...'}
+              </Text>
+              <Ionicons name="chevron-down" size={18} color="rgba(26, 26, 46, 0.6)" />
+            </TouchableOpacity>
           </View>
         </GradientCard>
 
@@ -1880,6 +2291,118 @@ const AdminScreen = ({ navigation }) => {
           </GradientCard>
         )}
 
+        {/* Battle Royale Settings - Only for Virtual Games */}
+        {gameType === 'virtual' && (
+          <GradientCard style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              ⏱️ Competition Settings
+            </Text>
+            <Text style={[styles.helpText, { color: theme.colors.textSecondary, marginBottom: 16 }]}>
+              Players compete for the best score within the time limit. Top players win prizes!
+            </Text>
+
+            {/* Competition Duration Dropdown */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                Competition Duration
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowDurationPicker(true)}
+                activeOpacity={0.85}
+                style={styles.selectInput}
+              >
+                <Text style={styles.selectText}>
+                  {DURATION_OPTIONS.find(opt => opt.value === competitionDuration)?.label || 'Select duration...'}
+                </Text>
+                <Ionicons name="chevron-down" size={18} color="rgba(26, 26, 46, 0.6)" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Prize Distribution */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                Prize Distribution (% of total prize)
+              </Text>
+              <Text style={[styles.helpText, { color: theme.colors.textSecondary, marginBottom: 12 }]}>
+                Set what percentage of the prize pool each winner receives.
+              </Text>
+              
+              <View style={styles.prizeDistributionContainer}>
+                {/* 1st Place */}
+                <View style={styles.prizeInputRow}>
+                  <View style={styles.prizeRankBadge}>
+                    <Text style={styles.prizeRankEmoji}>🥇</Text>
+                    <Text style={[styles.prizeRankText, { color: theme.colors.text }]}>1st</Text>
+                  </View>
+                  <View style={styles.prizeInputWrapper}>
+                    <TextInput
+                      style={[styles.prizeInput, { color: theme.colors.text }]}
+                      placeholder="100"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={prize1stPercent}
+                      onChangeText={setPrize1stPercent}
+                      keyboardType="numeric"
+                    />
+                    <Text style={[styles.prizePercentSign, { color: theme.colors.textSecondary }]}>%</Text>
+                  </View>
+                  <Text style={[styles.prizeAmountPreview, { color: theme.colors.success }]}>
+                    ${Math.round((Number(prizeAmount) || 0) * (Number(prize1stPercent) || 0) / 100)}
+                  </Text>
+                </View>
+
+                {/* 2nd Place */}
+                <View style={styles.prizeInputRow}>
+                  <View style={styles.prizeRankBadge}>
+                    <Text style={styles.prizeRankEmoji}>🥈</Text>
+                    <Text style={[styles.prizeRankText, { color: theme.colors.text }]}>2nd</Text>
+                  </View>
+                  <View style={styles.prizeInputWrapper}>
+                    <TextInput
+                      style={[styles.prizeInput, { color: theme.colors.text }]}
+                      placeholder="60"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={prize2ndPercent}
+                      onChangeText={setPrize2ndPercent}
+                      keyboardType="numeric"
+                    />
+                    <Text style={[styles.prizePercentSign, { color: theme.colors.textSecondary }]}>%</Text>
+                  </View>
+                  <Text style={[styles.prizeAmountPreview, { color: theme.colors.success }]}>
+                    ${Math.round((Number(prizeAmount) || 0) * (Number(prize2ndPercent) || 0) / 100)}
+                  </Text>
+                </View>
+
+                {/* 3rd Place */}
+                <View style={styles.prizeInputRow}>
+                  <View style={styles.prizeRankBadge}>
+                    <Text style={styles.prizeRankEmoji}>🥉</Text>
+                    <Text style={[styles.prizeRankText, { color: theme.colors.text }]}>3rd</Text>
+                  </View>
+                  <View style={styles.prizeInputWrapper}>
+                    <TextInput
+                      style={[styles.prizeInput, { color: theme.colors.text }]}
+                      placeholder="30"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={prize3rdPercent}
+                      onChangeText={setPrize3rdPercent}
+                      keyboardType="numeric"
+                    />
+                    <Text style={[styles.prizePercentSign, { color: theme.colors.textSecondary }]}>%</Text>
+                  </View>
+                  <Text style={[styles.prizeAmountPreview, { color: theme.colors.success }]}>
+                    ${Math.round((Number(prizeAmount) || 0) * (Number(prize3rdPercent) || 0) / 100)}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={[styles.helpText, { color: theme.colors.textSecondary, marginTop: 8 }]}>
+                Total: {Number(prize1stPercent || 0) + Number(prize2ndPercent || 0) + Number(prize3rdPercent || 0)}% 
+                (${Math.round((Number(prizeAmount) || 0) * (Number(prize1stPercent || 0) + Number(prize2ndPercent || 0) + Number(prize3rdPercent || 0)) / 100)})
+              </Text>
+            </View>
+          </GradientCard>
+        )}
+
         {/* Difficulty Level */}
         <GradientCard style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
@@ -1981,6 +2504,14 @@ const AdminScreen = ({ navigation }) => {
         <GradientCard style={styles.section}>
           <View style={styles.gamesHeader}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>🎯 All Games</Text>
+            <TouchableOpacity
+              onPress={checkNotificationStats}
+              style={styles.notificationStatsButton}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="notifications-outline" size={18} color={theme.colors.accent} />
+              <Text style={[styles.notificationStatsText, { color: theme.colors.accent }]}>Stats</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Status Filter */}
@@ -2172,13 +2703,26 @@ const AdminScreen = ({ navigation }) => {
                   )}
 
                   {game.status === 'completed' && game.winners && game.winners.length > 0 && (
-                    <View style={styles.winnersInfo}>
+                    <TouchableOpacity 
+                      style={styles.winnersInfo}
+                      onPress={() => showWinnersDetails(game)}
+                      activeOpacity={0.7}
+                    >
                       <Ionicons name="trophy" size={16} color="#FFD700" />
                       <Text style={[styles.winnersText, { color: theme.colors.text }]}>
-                        {game.winners.length} winner{game.winners.length !== 1 ? 's' : ''} declared
+                        {game.winners.length} winner{game.winners.length !== 1 ? 's' : ''} - Tap for details
                       </Text>
-                    </View>
+                    </TouchableOpacity>
                   )}
+
+                  {/* Delete Button - always visible */}
+                  <TouchableOpacity
+                    onPress={() => handleDeleteGame(game)}
+                    activeOpacity={0.7}
+                    style={styles.deleteButton}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                  </TouchableOpacity>
                 </View>
               </View>
             ))
@@ -2187,6 +2731,92 @@ const AdminScreen = ({ navigation }) => {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* City Picker Modal */}
+      <Modal
+        visible={showCityPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCityPicker(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowCityPicker(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select city</Text>
+              <TouchableOpacity
+                onPress={() => setShowCityPicker(false)}
+                style={styles.modalClose}
+              >
+                <Ionicons name="close" size={22} color="rgba(26, 26, 46, 0.7)" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={CITY_OPTIONS.filter(opt => opt.value !== '')}
+              keyExtractor={(item) => item.value}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setCity(item.value);
+                    setShowCityPicker(false);
+                  }}
+                >
+                  <Text style={[styles.modalItemText, city === item.value && { color: '#8B5CF6' }]}>
+                    {item.label}
+                  </Text>
+                  {city === item.value && (
+                    <Ionicons name="checkmark" size={18} color="#8B5CF6" />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Duration Picker Modal */}
+      <Modal
+        visible={showDurationPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDurationPicker(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowDurationPicker(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Competition duration</Text>
+              <TouchableOpacity
+                onPress={() => setShowDurationPicker(false)}
+                style={styles.modalClose}
+              >
+                <Ionicons name="close" size={22} color="rgba(26, 26, 46, 0.7)" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={DURATION_OPTIONS}
+              keyExtractor={(item) => item.value}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setCompetitionDuration(item.value);
+                    setShowDurationPicker(false);
+                  }}
+                >
+                  <Text style={[styles.modalItemText, competitionDuration === item.value && { color: '#8B5CF6' }]}>
+                    {item.label}
+                  </Text>
+                  {competitionDuration === item.value && (
+                    <Ionicons name="checkmark" size={18} color="#8B5CF6" />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </GradientBackground>
   );
 };
@@ -2415,6 +3045,166 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  // Battle Royale / Competition Settings styles
+  durationOptionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  durationOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  durationOptionSelected: {
+    backgroundColor: '#8B5CF6',
+    borderColor: '#8B5CF6',
+  },
+  durationOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // City dropdown styles
+  cityDropdownContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  cityOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    gap: 6,
+  },
+  cityOptionSelected: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  cityOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Simple select input styles (matching onboarding)
+  selectInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 229, 0.2)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectText: {
+    fontSize: 16,
+    color: '#1A1A2E',
+    fontWeight: '600',
+  },
+  selectPlaceholder: {
+    color: 'rgba(26, 26, 46, 0.4)',
+    fontWeight: '600',
+  },
+  // Simple modal styles (matching onboarding)
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    padding: 24,
+    justifyContent: 'center',
+  },
+  modalCard: {
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderRadius: 18,
+    maxHeight: '70%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1A1A2E',
+  },
+  modalClose: {
+    padding: 6,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+  },
+  modalItemText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A1A2E',
+  },
+  prizeDistributionContainer: {
+    gap: 12,
+  },
+  prizeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  prizeRankBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 70,
+    gap: 6,
+  },
+  prizeRankEmoji: {
+    fontSize: 20,
+  },
+  prizeRankText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  prizeInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  prizeInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  prizePercentSign: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  prizeAmountPreview: {
+    fontSize: 14,
+    fontWeight: '700',
+    minWidth: 60,
+    textAlign: 'right',
+  },
   difficultyContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2469,6 +3259,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
+  notificationStatsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 212, 229, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  notificationStatsText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
   redemptionsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2497,11 +3300,32 @@ const styles = StyleSheet.create({
   redemptionTitle: {
     fontSize: 16,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 8,
+  },
+  redemptionUserName: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   redemptionMeta: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
+  },
+  socialLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  socialLinkText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#8B5CF6',
   },
   redemptionActions: {
     flexDirection: 'row',
@@ -2735,6 +3559,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  deleteButton: {
+    padding: 10,
+    marginLeft: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalOverlay: {
     flex: 1,
