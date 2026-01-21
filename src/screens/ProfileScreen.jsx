@@ -52,7 +52,7 @@ const ProfileScreen = ({ navigation }) => {
     wins: 10,
     friends: 47,
   });
-  const canRedeem = stats.balance >= 25 && !isRedeeming;
+  const canRedeem = stats.balance >= 25 && !isRedeeming && socialMediaLink.trim().length > 0;
 
   useEffect(() => {
     if (!hasFirebaseConfig) return;
@@ -581,8 +581,15 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={[styles.socialLinkHint, { color: theme.colors.textSecondary }]}>
                 Paste the link to your social media post showing your winner card
               </Text>
-              <View style={[styles.socialLinkInputContainer, { borderColor: theme.colors.textSecondary }]}>
-                <Ionicons name="link-outline" size={20} color={theme.colors.textSecondary} />
+              <View style={[
+                styles.socialLinkInputContainer, 
+                { borderColor: socialMediaLink.trim().length > 0 ? '#10B981' : '#EF4444' }
+              ]}>
+                <Ionicons 
+                  name={socialMediaLink.trim().length > 0 ? "checkmark-circle" : "link-outline"} 
+                  size={20} 
+                  color={socialMediaLink.trim().length > 0 ? '#10B981' : '#EF4444'} 
+                />
                 <TextInput
                   style={[styles.socialLinkInput, { color: theme.colors.text }]}
                   placeholder="https://instagram.com/p/..."
@@ -594,6 +601,11 @@ const ProfileScreen = ({ navigation }) => {
                   keyboardType="url"
                 />
               </View>
+              {!socialMediaLink.trim() && (
+                <Text style={styles.socialLinkRequired}>
+                  ⚠️ You must provide your social media post link to redeem
+                </Text>
+              )}
             </View>
 
             <TouchableOpacity
@@ -908,6 +920,12 @@ const styles = StyleSheet.create({
   socialLinkInput: {
     flex: 1,
     fontSize: 14,
+  },
+  socialLinkRequired: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 6,
   },
   fullWidth: {
     width: '100%',

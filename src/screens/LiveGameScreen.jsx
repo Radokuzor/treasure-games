@@ -74,10 +74,10 @@ export default function LiveGameScreen({ route, navigation }) {
   const distancePulseAnim = useRef(new Animated.Value(1)).current;
   const distancePulseColor = useRef(new Animated.Value(0)).current;
 
-  // Compass feature
+  // Compass feature (currently disabled - not accurate enough)
   const [bearing, setBearing] = useState(0);
   const [deviceHeading, setDeviceHeading] = useState(0);
-  const [compassEnabled, setCompassEnabled] = useState(true);
+  const [compassEnabled, setCompassEnabled] = useState(false); // Disabled - arrow navigation not accurate
   const [showCompass, setShowCompass] = useState(false);
   const compassRotation = useRef(new Animated.Value(0)).current;
 
@@ -678,8 +678,14 @@ export default function LiveGameScreen({ route, navigation }) {
     return () => unsubscribe();
   }, [gameId, currentUser, isWinner, showLeaderboard, triggerCelebration]);
 
-  // Start GPS tracking
+  // Start GPS tracking - stops when user wins to save battery
   useEffect(() => {
+    // Don't start or continue tracking if user already won
+    if (isWinner) {
+      console.log('🏆 User is winner - stopping location tracking');
+      return;
+    }
+
     let locationSubscription = null;
     let webPollInterval = null;
 
@@ -700,6 +706,11 @@ export default function LiveGameScreen({ route, navigation }) {
         // Use polling instead to avoid emitter unsubscribe issues.
         if (Platform.OS === 'web') {
           const poll = async () => {
+            // Stop polling if user won
+            if (isWinner) {
+              if (webPollInterval) clearInterval(webPollInterval);
+              return;
+            }
             try {
               const pos = await Location.getCurrentPositionAsync({
                 accuracy: Location?.Accuracy?.Balanced,
@@ -747,11 +758,12 @@ export default function LiveGameScreen({ route, navigation }) {
         }
       }
     };
-  }, []);
+  }, [isWinner]);
 
   // Calculate distance and proximity when location or game changes
   useEffect(() => {
-    if (!game?.location || !userLocation) return;
+    // Skip distance calculations if user already won
+    if (!game?.location || !userLocation || isWinner) return;
 
     const dist = calculateDistance(
       userLocation.latitude,
@@ -787,7 +799,7 @@ export default function LiveGameScreen({ route, navigation }) {
     const odds = calculateOdds(proximity, game.winners?.length || 0, game.winnerSlots || 3);
     setOddsPercent(odds);
 
-    // Calculate bearing for compass
+    // Calculate bearing for compass (disabled but keeping calculation)
     const bearingDegrees = calculateBearing(
       userLocation.latitude,
       userLocation.longitude,
@@ -796,7 +808,7 @@ export default function LiveGameScreen({ route, navigation }) {
     );
     setBearing(bearingDegrees);
 
-    // Auto-trigger mini-game when user arrives at location (only once)
+    // Auto-trigger mini-game INSTANTLY when user arrives at location (only once)
     const accuracyRadius = Number(game?.accuracyRadius) || 10;
     const hasMiniGame = game?.miniGame?.type;
     const isWithinRadius = dist <= accuracyRadius;
@@ -804,21 +816,22 @@ export default function LiveGameScreen({ route, navigation }) {
     const canTrigger = hasMiniGame && isWithinRadius && !hasAutoOpened && !miniGameCompleted && !isWinner && game.status === 'live';
 
     if (canTrigger) {
-      console.log('🎮 User arrived at location! Auto-triggering mini-game (once):', game.miniGame.type);
+      console.log('🎮 User arrived at location! Instantly triggering mini-game:', game.miniGame.type);
+      // Trigger immediately without any delay
       setHasAutoOpened(true); // Prevents auto-opening again after close
       setMiniGameTriggered(true);
       setShowMiniGame(true);
 
-      // Haptic feedback
+      // Haptic feedback for immediate response
       if (Platform.OS !== 'web' && Haptics) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
   }, [userLocation, game, hasAutoOpened, miniGameCompleted, isWinner]);
   
-  // Distance pulse animation - blinks every 1 second
+  // Distance pulse animation - blinks every 1 second (stops when user wins)
   useEffect(() => {
-    if (game?.type === 'virtual' || distance === null) return;
+    if (game?.type === 'virtual' || distance === null || isWinner) return;
     
     const pulseAnimation = Animated.loop(
       Animated.sequence([
@@ -838,11 +851,12 @@ export default function LiveGameScreen({ route, navigation }) {
     pulseAnimation.start();
     
     return () => pulseAnimation.stop();
-  }, [game?.type, distance !== null]);
+  }, [game?.type, distance !== null, isWinner]);
 
-  // Subscribe to device magnetometer for real-time compass orientation
+  // Subscribe to device magnetometer for real-time compass orientation (disabled - compass not accurate)
   useEffect(() => {
-    if (Platform.OS === 'web' || !Magnetometer) return;
+    // Skip magnetometer if compass is disabled or user already won
+    if (Platform.OS === 'web' || !Magnetometer || !compassEnabled || isWinner) return;
 
     let subscription;
 
@@ -880,7 +894,7 @@ export default function LiveGameScreen({ route, navigation }) {
         subscription.remove();
       }
     };
-  }, []);
+  }, [compassEnabled, isWinner]);
 
   // Update compass rotation based on bearing to target and device heading
   useEffect(() => {
