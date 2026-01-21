@@ -64,8 +64,15 @@ export default function LiveGameScreen({ route, navigation }) {
   // User location and tracking
   const [userLocation, setUserLocation] = useState(null);
   const [distance, setDistance] = useState(null);
+  const [previousDistance, setPreviousDistance] = useState(null);
+  const [distanceDirection, setDistanceDirection] = useState(null); // 'closer', 'farther', or null
+  const [feetChange, setFeetChange] = useState(0); // How many feet changed since last update
   const [proximityPercent, setProximityPercent] = useState(0);
   const [oddsPercent, setOddsPercent] = useState(0);
+  
+  // Distance pulse animation
+  const distancePulseAnim = useRef(new Animated.Value(1)).current;
+  const distancePulseColor = useRef(new Animated.Value(0)).current;
 
   // Compass feature
   const [bearing, setBearing] = useState(0);
@@ -292,17 +299,12 @@ export default function LiveGameScreen({ route, navigation }) {
     if (typeof meters !== 'number' || !Number.isFinite(meters)) return '';
 
     const metersPerMile = 1609.344;
-    const metersPerYard = 0.9144;
     const metersPerFoot = 0.3048;
 
-    if (meters < 10 * metersPerYard) {
+    // Always show feet for more accurate feedback
+    if (meters < metersPerMile) {
       const feet = Math.max(0, Math.round(meters / metersPerFoot));
       return `${feet} ${feet === 1 ? 'foot' : 'feet'} away`;
-    }
-
-    if (meters < metersPerMile) {
-      const yards = Math.max(0, Math.round(meters / metersPerYard));
-      return `${yards} ${yards === 1 ? 'yard' : 'yards'} away`;
     }
 
     const miles = meters / metersPerMile;
@@ -713,12 +715,12 @@ export default function LiveGameScreen({ route, navigation }) {
           return;
         }
 
-        // Watch position with high accuracy
+        // Watch position with high accuracy - update every 1 second for live direction feedback
         locationSubscription = await Location.watchPositionAsync(
           {
             accuracy: Location?.Accuracy?.BestForNavigation ?? Location?.Accuracy?.Balanced,
-            distanceInterval: 5, // Update every 5 meters
-            timeInterval: 2000, // Update every 2 seconds
+            distanceInterval: 1, // Update every 1 meter for more responsive feedback
+            timeInterval: 1000, // Update every 1 second for live direction check
           },
           (location) => {
             setUserLocation(location.coords);
@@ -758,6 +760,25 @@ export default function LiveGameScreen({ route, navigation }) {
       game.location.longitude
     );
 
+    // Track direction (closer or farther) based on previous distance
+    const metersPerFoot = 0.3048;
+    if (previousDistance !== null && distance !== null) {
+      const threshold = 0.3; // meters threshold to avoid noise (about 1 foot)
+      const changeFeet = Math.round((previousDistance - dist) / metersPerFoot); // positive = getting closer
+      
+      if (dist < previousDistance - threshold) {
+        setDistanceDirection('closer');
+        setFeetChange(Math.abs(changeFeet)); // Show positive feet when getting closer
+      } else if (dist > previousDistance + threshold) {
+        setDistanceDirection('farther');
+        setFeetChange(Math.abs(changeFeet)); // Show positive feet when going wrong way
+      } else {
+        // Within threshold, keep direction but reset feet change
+        setFeetChange(0);
+      }
+    }
+    
+    setPreviousDistance(distance);
     setDistance(dist);
 
     const proximity = calculateProximity(dist, game.accuracyRadius || 10);
@@ -794,6 +815,30 @@ export default function LiveGameScreen({ route, navigation }) {
       }
     }
   }, [userLocation, game, hasAutoOpened, miniGameCompleted, isWinner]);
+  
+  // Distance pulse animation - blinks every 1 second
+  useEffect(() => {
+    if (game?.type === 'virtual' || distance === null) return;
+    
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(distancePulseAnim, {
+          toValue: 1.08,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(distancePulseAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    
+    pulseAnimation.start();
+    
+    return () => pulseAnimation.stop();
+  }, [game?.type, distance !== null]);
 
   // Subscribe to device magnetometer for real-time compass orientation
   useEffect(() => {
@@ -1575,12 +1620,49 @@ export default function LiveGameScreen({ route, navigation }) {
             )}
           </Animated.View>
 
-          {/* Location Game: Distance Display */}
+          {/* Location Game: Distance Display with Pulse Animation */}
           {!isVirtualGame && distance !== null && (
-            <View style={styles.distanceContainer}>
-              <Ionicons name="location" size={32} color="#1A1A2E" />
-              <Text style={styles.distanceText}>{formatDistanceAway(distance)}</Text>
-            </View>
+            <Animated.View 
+              style={[
+                styles.distanceContainer,
+                distanceDirection === 'closer' && styles.distanceContainerCloser,
+                distanceDirection === 'farther' && styles.distanceContainerFarther,
+                { transform: [{ scale: distancePulseAnim }] }
+              ]}
+            >
+              <Ionicons 
+                name={distanceDirection === 'closer' ? 'arrow-down-circle' : distanceDirection === 'farther' ? 'arrow-up-circle' : 'location'} 
+                size={32} 
+                color={distanceDirection === 'closer' ? '#10B981' : distanceDirection === 'farther' ? '#EF4444' : '#1A1A2E'} 
+              />
+              <View style={styles.distanceTextContainer}>
+                <Text style={[
+                  styles.distanceText,
+                  distanceDirection === 'closer' && styles.distanceTextCloser,
+                  distanceDirection === 'farther' && styles.distanceTextFarther,
+                ]}>{formatDistanceAway(distance)}</Text>
+                {distanceDirection && (
+                  <View style={styles.directionFeedbackRow}>
+                    <Text style={[
+                      styles.distanceDirectionText,
+                      distanceDirection === 'closer' && styles.distanceDirectionCloser,
+                      distanceDirection === 'farther' && styles.distanceDirectionFarther,
+                    ]}>
+                      {distanceDirection === 'closer' ? '↓ Getting closer!' : '↑ Wrong way!'}
+                    </Text>
+                    {feetChange > 0 && (
+                      <Text style={[
+                        styles.feetChangeText,
+                        distanceDirection === 'closer' && styles.feetChangeCloser,
+                        distanceDirection === 'farther' && styles.feetChangeFarther,
+                      ]}>
+                        {distanceDirection === 'closer' ? `-${feetChange} ft` : `+${feetChange} ft`}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
+            </Animated.View>
           )}
 
           {/* Virtual Game: Battle Royale Section */}
@@ -2308,22 +2390,75 @@ const styles = StyleSheet.create({
   distanceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     paddingHorizontal: 24,
     paddingVertical: 16,
     borderRadius: 20,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
+    borderWidth: 3,
+    borderColor: 'transparent',
+  },
+  distanceContainerCloser: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: '#10B981',
+    shadowColor: '#10B981',
+  },
+  distanceContainerFarther: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderColor: '#EF4444',
+    shadowColor: '#EF4444',
+  },
+  distanceTextContainer: {
+    marginLeft: 12,
+    flexDirection: 'column',
   },
   distanceText: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     color: '#1A1A2E',
-    marginLeft: 12,
+  },
+  distanceTextCloser: {
+    color: '#059669',
+  },
+  distanceTextFarther: {
+    color: '#DC2626',
+  },
+  directionFeedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: 8,
+  },
+  distanceDirectionText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  distanceDirectionCloser: {
+    color: '#10B981',
+  },
+  distanceDirectionFarther: {
+    color: '#EF4444',
+  },
+  feetChangeText: {
+    fontSize: 14,
+    fontWeight: '800',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  feetChangeCloser: {
+    color: '#FFFFFF',
+    backgroundColor: '#10B981',
+  },
+  feetChangeFarther: {
+    color: '#FFFFFF',
+    backgroundColor: '#EF4444',
   },
   oddsContainer: {
     width: '100%',

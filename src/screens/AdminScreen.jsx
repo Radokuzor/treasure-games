@@ -144,7 +144,7 @@ const AdminScreen = ({ navigation }) => {
   const [targetTaps, setTargetTaps] = useState('1000');
 
   // Mini-game challenge settings (for location games)
-  const [miniGameType, setMiniGameType] = useState('none'); // 'none', 'tap_count', 'hold_duration', 'rhythm_tap', 'custom'
+  const [miniGameType, setMiniGameType] = useState('tap_count'); // 'none', 'tap_count', 'hold_duration', 'rhythm_tap', 'custom' - defaults to tap_count
   const [miniGameTargetTaps, setMiniGameTargetTaps] = useState('100');
   const [miniGameTimeLimit, setMiniGameTimeLimit] = useState('30');
   const [miniGameHoldDuration, setMiniGameHoldDuration] = useState('5000');

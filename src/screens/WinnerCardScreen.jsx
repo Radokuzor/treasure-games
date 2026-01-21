@@ -298,11 +298,11 @@ const WinnerCardScreen = ({
                   <Text style={styles.gameNameText} numberOfLines={2}>{gameName}</Text>
                 </View>
 
-                {/* Powered by section - shows sponsor or app icon */}
+                {/* Powered by section - shows sponsor or default app logo */}
                 <View style={styles.sponsorContainer}>
                   <Text style={styles.poweredByText}>Powered by</Text>
                   {sponsorLogo ? (
-                    <Image 
+                    <Image
                       source={typeof sponsorLogo === 'string' ? { uri: sponsorLogo } : sponsorLogo}
                       style={styles.sponsorLogo}
                       resizeMode="contain"
@@ -310,9 +310,9 @@ const WinnerCardScreen = ({
                   ) : sponsorName ? (
                     <Text style={styles.sponsorNameText}>{sponsorName}</Text>
                   ) : (
-                    <Image 
-                      source={require('../../assets/images/icon.png')}
-                      style={styles.appIconFallback}
+                    <Image
+                      source={require('./sponsorlogo.png')}
+                      style={styles.defaultSponsorLogo}
                       resizeMode="contain"
                     />
                   )}
@@ -621,6 +621,10 @@ const styles = StyleSheet.create({
   sponsorLogo: {
     width: 100,
     height: 35, // 3:1 aspect ratio
+  },
+  defaultSponsorLogo: {
+    width: 140,
+    height: 50, // Larger size for the default Grab The Cash logo
   },
   appIconFallback: {
     width: 40,
