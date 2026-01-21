@@ -1137,13 +1137,19 @@ export default function LiveGameScreen({ route, navigation }) {
           }
           
           // Show winner card for top 3 in Battle Royale
+          // wonMoney is true only if user is eligible (hasn't won today yet)
+          // Note: winEligible reflects the state at game load, actual money win
+          // happens when Battle Royale ends and processBattleRoyaleWinners runs
           setTimeout(() => {
             setWinnerCardData({
               gameName: game.name,
-              prizeAmount: Number(game.prizeAmount) || 0,
               position: newRank,
               score: newEntry.score,
               gameType: 'virtual',
+              wonMoney: false, // Battle Royale: money is awarded at end, this is just achievement
+              city: game.city || null,
+              sponsorLogo: game.sponsorLogo || null,
+              sponsorName: game.sponsorName || null,
             });
             setShowWinnerCard(true);
           }, 1500);
@@ -1278,9 +1284,12 @@ export default function LiveGameScreen({ route, navigation }) {
           setTimeout(() => {
             setWinnerCardData({
               gameName: game.name,
-              prizeAmount: Number(game.prizeAmount) || 0,
               position: 1, // First to arrive wins
               gameType: 'location',
+              wonMoney: true, // They actually won money
+              city: game.city || null,
+              sponsorLogo: game.sponsorLogo || null,
+              sponsorName: game.sponsorName || null,
             });
             setShowWinnerCard(true);
           }, 2000); // Delay to let celebration play
@@ -1831,10 +1840,13 @@ export default function LiveGameScreen({ route, navigation }) {
                     onPress={() => {
                       setWinnerCardData({
                         gameName: game.name,
-                        prizeAmount: Number(game.prizeAmount) || 0,
                         position: userRank,
                         score: userBestScore,
                         gameType: 'virtual',
+                        wonMoney: false, // Manual button - just for sharing achievement
+                        city: game.city || null,
+                        sponsorLogo: game.sponsorLogo || null,
+                        sponsorName: game.sponsorName || null,
                       });
                       setShowWinnerCard(true);
                     }}
@@ -1878,12 +1890,16 @@ export default function LiveGameScreen({ route, navigation }) {
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={() => {
+                    // Competition ended - if user was eligible, they won money
                     setWinnerCardData({
                       gameName: game.name,
-                      prizeAmount: Number(game.prizeAmount) || 0,
                       position: userRank,
                       score: userBestScore,
                       gameType: 'virtual',
+                      wonMoney: winEligible, // True if they were eligible to win money
+                      city: game.city || null,
+                      sponsorLogo: game.sponsorLogo || null,
+                      sponsorName: game.sponsorName || null,
                     });
                     setShowWinnerCard(true);
                   }}
@@ -1954,10 +1970,13 @@ export default function LiveGameScreen({ route, navigation }) {
                 onPress={() => {
                   setWinnerCardData({
                     gameName: game.name,
-                    prizeAmount: Number(game.prizeAmount) || 0,
                     position: userRank || 1,
                     score: userBestScore,
                     gameType: isVirtualGame ? 'virtual' : 'location',
+                    wonMoney: !winEligible, // If not eligible now, they already won money
+                    city: game.city || null,
+                    sponsorLogo: game.sponsorLogo || null,
+                    sponsorName: game.sponsorName || null,
                   });
                   setShowWinnerCard(true);
                 }}
@@ -2167,11 +2186,13 @@ export default function LiveGameScreen({ route, navigation }) {
             setWinnerCardData(null);
           }}
           gameName={winnerCardData.gameName}
-          prizeAmount={winnerCardData.prizeAmount}
           position={winnerCardData.position}
           score={winnerCardData.score}
           gameType={winnerCardData.gameType}
-          isTopThree={winnerCardData.position <= 3}
+          wonMoney={winnerCardData.wonMoney || false}
+          city={winnerCardData.city}
+          sponsorLogo={winnerCardData.sponsorLogo}
+          sponsorName={winnerCardData.sponsorName}
         />
       )}
     </LinearGradient>
@@ -2258,6 +2279,7 @@ const styles = StyleSheet.create({
   infoContainer: {
     flex: 1,
     padding: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40, // Extra top padding for notch/camera
     alignItems: 'center',
   },
   titleContainer: {

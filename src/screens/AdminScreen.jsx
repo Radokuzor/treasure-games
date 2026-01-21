@@ -89,6 +89,10 @@ const AdminScreen = ({ navigation }) => {
   const [prize2ndPercent, setPrize2ndPercent] = useState('60');
   const [prize3rdPercent, setPrize3rdPercent] = useState('30');
 
+  // Sponsor settings (optional)
+  const [sponsorLogo, setSponsorLogo] = useState(null); // Sponsor logo URI
+  const [sponsorName, setSponsorName] = useState(''); // Sponsor name (fallback if no logo)
+
   // Dropdown modal states
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [showDurationPicker, setShowDurationPicker] = useState(false);
@@ -659,6 +663,9 @@ const AdminScreen = ({ navigation }) => {
     setMiniGameToleranceMs('150');
     setCustomMiniGameFile(null);
     setCustomMiniGameFileName('');
+    // Reset sponsor settings
+    setSponsorLogo(null);
+    setSponsorName('');
   };
 
   // Pick custom HTML game file
@@ -777,6 +784,61 @@ const AdminScreen = ({ navigation }) => {
     setCluePhotos(cluePhotos.filter((_, i) => i !== index));
   };
 
+  // Pick sponsor logo image
+  const pickSponsorLogo = async () => {
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const fileUrl = URL.createObjectURL(file);
+          setSponsorLogo(fileUrl);
+        }
+      };
+
+      input.click();
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [3, 1], // Wide aspect ratio for logos
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setSponsorLogo(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick sponsor logo. Please try again.');
+      console.error('Sponsor logo picker error:', error);
+    }
+  };
+
+  // Upload sponsor logo to Firebase Storage
+  const uploadSponsorLogoToStorage = async (uri, gameId) => {
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      const storage = getStorage();
+      const storageRef = ref(storage, `games/${gameId}/sponsor-logo.png`);
+
+      await uploadBytes(storageRef, blob);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      return downloadURL;
+    } catch (error) {
+      console.error('Sponsor logo upload error:', error);
+      throw error;
+    }
+  };
+
   const uploadPhotoToStorage = async (uri, gameId, index) => {
     try {
       const response = await fetch(uri);
@@ -848,6 +910,9 @@ const AdminScreen = ({ navigation }) => {
         participants: [],
         winners: [],
         attempts: [],
+        // Sponsor info (optional)
+        sponsorName: sponsorName.trim() || null,
+        sponsorLogo: null, // Will be updated after upload if provided
       };
 
       // Location-based game specific fields
@@ -1007,6 +1072,25 @@ const AdminScreen = ({ navigation }) => {
           Alert.alert(
             'Warning',
             'Game created but custom game failed to upload. The default Tap Race game will be used.'
+          );
+        }
+      }
+
+      // Upload sponsor logo if provided
+      if (sponsorLogo) {
+        try {
+          const sponsorLogoUrl = await uploadSponsorLogoToStorage(sponsorLogo, gameRef.id);
+
+          // Update game document with sponsor logo URL
+          await updateDoc(doc(db, 'games', gameRef.id), {
+            sponsorLogo: sponsorLogoUrl,
+            updatedAt: serverTimestamp(),
+          });
+        } catch (sponsorError) {
+          console.error('Sponsor logo upload error:', sponsorError);
+          Alert.alert(
+            'Warning',
+            'Game created but sponsor logo failed to upload. You can add it later by editing the game.'
           );
         }
       }
@@ -1508,7 +1592,7 @@ const AdminScreen = ({ navigation }) => {
               <Ionicons name="trophy-outline" size={20} color={theme.colors.textSecondary} />
               <TextInput
                 style={[styles.input, { color: theme.colors.text }]}
-                placeholder="Downtown Treasure Hunt"
+                placeholder="Downtown Cash Hunt"
                 placeholderTextColor={theme.colors.textSecondary}
                 value={gameName}
                 onChangeText={setGameName}
@@ -1575,7 +1659,7 @@ const AdminScreen = ({ navigation }) => {
                 📍 Location Settings
               </Text>
               <Text style={[styles.helpText, { color: theme.colors.textSecondary }]}>
-                Tap on the map to set the treasure location
+                Tap on the map to set the game location
               </Text>
               <View style={styles.mapContainer}>
                 <UnifiedMapView
@@ -1662,7 +1746,7 @@ const AdminScreen = ({ navigation }) => {
               </Text>
               <Text style={[styles.helpText, { color: theme.colors.textSecondary }]}>
                 Add 5-10 photos showing the location. These will be displayed as a slideshow to help
-                players find the treasure.
+                players find the location.
               </Text>
 
               {/* Photo Grid */}
@@ -2402,6 +2486,73 @@ const AdminScreen = ({ navigation }) => {
             </View>
           </GradientCard>
         )}
+
+        {/* Sponsor Section (Optional) */}
+        <GradientCard style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            🤝 Sponsor (Optional)
+          </Text>
+          <Text style={[styles.helpText, { color: theme.colors.textSecondary }]}>
+            Add a sponsor logo to display on winner cards. Recommended size: 300x100 pixels (3:1 ratio).
+          </Text>
+
+          {/* Sponsor Name */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+              Sponsor Name
+            </Text>
+            <TextInput
+              style={[styles.input, { color: theme.colors.text }]}
+              placeholder="e.g., Nike, Coca-Cola"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={sponsorName}
+              onChangeText={setSponsorName}
+            />
+          </View>
+
+          {/* Sponsor Logo Upload */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+              Sponsor Logo
+            </Text>
+            
+            {sponsorLogo ? (
+              <View style={styles.sponsorLogoPreviewContainer}>
+                <Image 
+                  source={{ uri: sponsorLogo }} 
+                  style={styles.sponsorLogoPreview}
+                  resizeMode="contain"
+                />
+                <TouchableOpacity
+                  style={styles.removeSponsorLogoButton}
+                  onPress={() => setSponsorLogo(null)}
+                >
+                  <Ionicons name="close-circle" size={24} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.sponsorLogoUploadButton}
+                onPress={pickSponsorLogo}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={['#8B5CF6', '#7C3AED']}
+                  style={styles.sponsorLogoUploadGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Ionicons name="image-outline" size={24} color="#FFFFFF" />
+                  <Text style={styles.sponsorLogoUploadText}>Upload Sponsor Logo</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+            
+            <Text style={[styles.helpText, { color: theme.colors.textSecondary, marginTop: 8 }]}>
+              PNG or JPG, max 300x100px recommended for best display on winner cards.
+            </Text>
+          </View>
+        </GradientCard>
 
         {/* Difficulty Level */}
         <GradientCard style={styles.section}>
@@ -3630,6 +3781,40 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Sponsor logo styles
+  sponsorLogoPreviewContainer: {
+    position: 'relative',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  sponsorLogoPreview: {
+    width: 200,
+    height: 67, // 3:1 aspect ratio
+    borderRadius: 8,
+  },
+  removeSponsorLogoButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+  sponsorLogoUploadButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  sponsorLogoUploadGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 12,
+  },
+  sponsorLogoUploadText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as MediaLibrary from 'expo-media-library';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,104 +17,79 @@ import {
 } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 
-// Conditionally import Camera
-let Camera, CameraView;
-if (Platform.OS !== 'web') {
-  try {
-    const ExpoCamera = require('expo-camera');
-    Camera = ExpoCamera.Camera;
-    CameraView = ExpoCamera.CameraView;
-  } catch (e) {
-    console.log('expo-camera not available');
-  }
-}
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 48;
-const CARD_HEIGHT = CARD_WIDTH * 1.4;
+const CARD_HEIGHT = CARD_WIDTH * 1.5;
 
 const WinnerCardScreen = ({ 
   visible, 
   onClose, 
   gameName, 
-  prizeAmount, 
-  position, 
-  score,
-  gameType, // 'location' or 'virtual'
-  isTopThree = true,
+  position,        // 1, 2, 3, or null
+  score,           // User's score (for virtual games)
+  gameType,        // 'location' or 'virtual'
+  wonMoney = false, // Did they win money THIS time? (first win of day)
+  city = null,     // City name for hashtag
+  sponsorLogo = null,
+  sponsorName = null,
 }) => {
-  const [hasPermission, setHasPermission] = useState(null);
-  const [selfieUri, setSelfieUri] = useState(null);
-  const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [cardSaved, setCardSaved] = useState(false);
-  const cameraRef = useRef(null);
   const cardRef = useRef(null);
 
-  // Request camera permission when screen becomes visible
-  const requestCameraPermission = async () => {
-    if (Platform.OS === 'web') {
-      setHasPermission(false);
-      return;
-    }
+  // Determine card type and content
+  const isCashWinner = wonMoney;
+  const isOnPodium = position && position <= 3;
 
-    try {
-      // Try the newer API first (expo-camera v14+)
-      if (Camera?.requestCameraPermissionsAsync) {
-        const { status } = await Camera.requestCameraPermissionsAsync();
-        console.log('Camera permission status:', status);
-        setHasPermission(status === 'granted');
-        return;
-      }
-      
-      // Fallback to older API
-      if (Camera?.getCameraPermissionsAsync) {
-        const { status: existingStatus } = await Camera.getCameraPermissionsAsync();
-        if (existingStatus === 'granted') {
-          setHasPermission(true);
-          return;
-        }
-        
-        const { status } = await Camera.requestCameraPermissionsAsync();
-        setHasPermission(status === 'granted');
-        return;
-      }
-
-      console.log('No camera permission API available');
-      setHasPermission(false);
-    } catch (e) {
-      console.log('Camera permission error:', e);
-      setHasPermission(false);
+  // Get brand header text
+  const getBrandHeader = () => {
+    if (isCashWinner) {
+      return 'I GRABBED THE CASH!';
     }
+    return 'GRAB THE CASH';
   };
 
-  useEffect(() => {
-    if (visible) {
-      requestCameraPermission();
-    }
-  }, [visible]);
-
-  const takeSelfie = async () => {
-    if (!cameraRef.current || isTakingPhoto) return;
-    
-    setIsTakingPhoto(true);
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        skipProcessing: true,
-      });
-      setSelfieUri(photo.uri);
-    } catch (error) {
-      console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
-    } finally {
-      setIsTakingPhoto(false);
-    }
+  // Get position text with medals on both sides
+  const getPositionDisplay = () => {
+    if (position === 1) return '🥇 1ST PLACE 🥇';
+    if (position === 2) return '🥈 2ND PLACE 🥈';
+    if (position === 3) return '🥉 3RD PLACE 🥉';
+    return null;
   };
 
-  const retakeSelfie = () => {
-    setSelfieUri(null);
-    setCardSaved(false);
+
+  // Get gradient colors based on card type and position
+  const getCardGradient = () => {
+    if (isCashWinner) {
+      return ['#10B981', '#059669', '#047857']; // Green for cash winners
+    }
+    if (position === 1) return ['#FFD700', '#FFA500', '#FF8C00']; // Gold
+    if (position === 2) return ['#C0C0C0', '#A8A8A8', '#8B8B8B']; // Silver
+    if (position === 3) return ['#CD7F32', '#B87333', '#A0522D']; // Bronze
+    return ['#8B5CF6', '#7C3AED', '#6D28D9']; // Purple for high scores
+  };
+
+  // Get hashtag based on context
+  const getHashtag = () => {
+    const cityTag = city ? `#${city.replace(/\s+/g, '')}Winner` : '#Winner';
+    if (isCashWinner) {
+      return `#GrabTheCash ${cityTag}`;
+    }
+    if (isOnPodium) {
+      return `#GrabTheCash #Podium`;
+    }
+    return '#GrabTheCash #HighScore';
+  };
+
+  const getShareMessage = () => {
+    const cityText = city ? ` in ${city}` : '';
+    if (isCashWinner) {
+      return `💰 I just grabbed the cash${cityText}! Think you can do it? #GrabTheCash ${city ? `#${city.replace(/\s+/g, '')}Winner` : '#Winner'}`;
+    }
+    if (isOnPodium) {
+      return `${getPositionEmoji()} I'm on the podium! ${score ? `Score: ${score.toLocaleString()}` : ''} Think you can beat me? #GrabTheCash #Podium`;
+    }
+    return `🎯 Just scored ${score?.toLocaleString() || 'big'} on Grab The Cash! Think you can beat it? #GrabTheCash #HighScore`;
   };
 
   const saveCardToGallery = async () => {
@@ -122,17 +97,14 @@ const WinnerCardScreen = ({
     
     setIsSaving(true);
     try {
-      // Request media library permission
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission needed', 'Please allow access to save the image.');
+        setIsSaving(false);
         return;
       }
 
-      // Capture the card as an image
       const uri = await cardRef.current.capture();
-      
-      // Save to gallery
       await MediaLibrary.saveToLibraryAsync(uri);
       setCardSaved(true);
       Alert.alert('Saved!', 'Your winner card has been saved to your gallery. Share it on social media!');
@@ -149,7 +121,6 @@ const WinnerCardScreen = ({
       await saveCardToGallery();
     }
     
-    // Open Instagram
     const instagramUrl = 'instagram://camera';
     const canOpen = await Linking.canOpenURL(instagramUrl);
     
@@ -218,280 +189,210 @@ const WinnerCardScreen = ({
     
     try {
       await Share.share({
-        message: `🏆 I just won on Treasure Island City Games! ${gameType === 'virtual' ? `#${position} with a score of ${score}!` : `$${prizeAmount} prize!`} Download the app and play! #TreasureIslandGames #Winner`,
+        message: getShareMessage(),
       });
     } catch (error) {
       console.error('Share error:', error);
     }
   };
 
-  const getPositionEmoji = () => {
-    if (position === 1) return '🥇';
-    if (position === 2) return '🥈';
-    if (position === 3) return '🥉';
-    return '🏆';
-  };
-
-  const getPositionText = () => {
-    if (position === 1) return '1ST PLACE';
-    if (position === 2) return '2ND PLACE';
-    if (position === 3) return '3RD PLACE';
-    return 'WINNER';
-  };
-
   if (!visible) return null;
-
-  // Web fallback
-  if (Platform.OS === 'web') {
-    return (
-      <View style={styles.container}>
-        <LinearGradient colors={['#8B5CF6', '#6366F1', '#4F46E5']} style={styles.gradient}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={28} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.webFallback}>
-            <Text style={styles.webFallbackTitle}>🎉 Congratulations!</Text>
-            <Text style={styles.webFallbackText}>
-              Winner cards are available on the mobile app. Download the app to take your winner selfie!
-            </Text>
-            <TouchableOpacity onPress={onClose} style={styles.webCloseButton}>
-              <Text style={styles.webCloseButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={['#8B5CF6', '#6366F1', '#4F46E5']} style={styles.gradient}>
+      <LinearGradient colors={['#1A1A2E', '#16213E', '#0F3460']} style={styles.gradient}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={28} color="#FFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {selfieUri ? 'Your Winner Card' : 'Take Your Winner Selfie!'}
-          </Text>
+          <Text style={styles.headerTitle}>🎉 Congrats!</Text>
           <View style={{ width: 44 }} />
         </View>
 
-        {!selfieUri ? (
-          // Camera View
-          <View style={styles.cameraContainer}>
-            {hasPermission === false ? (
-              <View style={styles.noPermission}>
-                <Ionicons name="camera-outline" size={64} color="rgba(255,255,255,0.5)" />
-                <Text style={styles.noPermissionText}>Camera access needed</Text>
-                <Text style={styles.noPermissionSubtext}>
-                  To take your Winner Card selfie, please allow camera access
-                </Text>
-                <TouchableOpacity
-                  onPress={requestCameraPermission}
-                  style={styles.requestPermissionButton}
-                >
-                  <Ionicons name="camera" size={20} color="#FFF" />
-                  <Text style={styles.requestPermissionButtonText}>Allow Camera Access</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => Linking.openSettings()}
-                  style={styles.settingsButton}
-                >
-                  <Text style={styles.settingsButtonText}>Open Settings</Text>
-                </TouchableOpacity>
-              </View>
-            ) : hasPermission === null ? (
-              <ActivityIndicator size="large" color="#FFF" />
-            ) : CameraView ? (
-              <>
-                <CameraView
-                  ref={cameraRef}
-                  style={styles.camera}
-                  facing="front"
-                />
-                {/* Face guide overlay */}
-                <View style={styles.faceGuideContainer}>
-                  <View style={styles.faceGuide}>
-                    <View style={styles.faceGuideInner} />
-                  </View>
-                  <Text style={styles.faceGuideText}>Position your face in the circle</Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.noPermission}>
-                <Ionicons name="camera-outline" size={64} color="rgba(255,255,255,0.5)" />
-                <Text style={styles.noPermissionText}>Camera not available</Text>
-              </View>
-            )}
-
-            {/* Capture Button */}
-            {hasPermission && CameraView && (
-              <TouchableOpacity 
-                onPress={takeSelfie} 
-                style={styles.captureButton}
-                disabled={isTakingPhoto}
+        {/* Winner Card */}
+        <View style={styles.cardPreviewContainer}>
+          <ViewShot ref={cardRef} options={{ format: 'png', quality: 1 }}>
+            <View style={styles.winnerCard}>
+              <LinearGradient
+                colors={getCardGradient()}
+                style={styles.cardGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
               >
-                <View style={styles.captureButtonOuter}>
-                  <View style={styles.captureButtonInner}>
-                    {isTakingPhoto ? (
-                      <ActivityIndicator color="#8B5CF6" />
-                    ) : (
-                      <Ionicons name="camera" size={32} color="#8B5CF6" />
+                {/* Decorative confetti elements */}
+                <View style={styles.confettiContainer}>
+                  {(isCashWinner 
+                    ? ['💰', '💵', '🤑', '💸', '✨', '🎉', '💎', '⭐']
+                    : ['🎉', '⭐', '✨', '🎊', '💫', '🌟', '🎯', '🔥']
+                  ).map((emoji, i) => (
+                    <Text 
+                      key={i} 
+                      style={[
+                        styles.confetti, 
+                        { 
+                          left: `${(i * 12) + 2}%`, 
+                          top: `${(i % 4) * 8 + 2}%`,
+                          transform: [{ rotate: `${i * 45}deg` }],
+                          fontSize: 20 + (i % 3) * 8,
+                        }
+                      ]}
+                    >
+                      {emoji}
+                    </Text>
+                  ))}
+                </View>
+
+                {/* Brand Header */}
+                <View style={styles.brandHeader}>
+                  <View style={styles.brandDivider} />
+                  <Text style={styles.brandName}>{getBrandHeader()}</Text>
+                  <View style={styles.brandDivider} />
+                </View>
+
+
+                {/* Central Pig Mascot */}
+                <View style={styles.mascotContainer}>
+                  <View style={[styles.mascotGlow, isCashWinner && styles.mascotGlowCash]} />
+                  <Image 
+                    source={require('../../assets/images/winningpig.png')} 
+                    style={styles.mascotImage}
+                    resizeMode="contain"
+                  />
+                </View>
+
+                {/* Position/Score Info */}
+                <View style={styles.infoContainer}>
+                  {/* Show trophy and WINNER for cash winners */}
+                  {isCashWinner && (
+                    <View style={styles.winnerBadgeContainer}>
+                      <Text style={styles.winnerTrophy}>🏆</Text>
+                      <Text style={styles.winnerLabel}>WINNER!</Text>
+                    </View>
+                  )}
+
+                  {/* Show position badge if on podium (non-cash) - medals on both sides */}
+                  {!isCashWinner && isOnPodium && (
+                    <View style={styles.positionBadge}>
+                      <Text style={styles.positionText}>{getPositionDisplay()}</Text>
+                    </View>
+                  )}
+
+                  {/* Show score for virtual games (achievement cards) */}
+                  {!isCashWinner && gameType === 'virtual' && score !== undefined && score !== null && (
+                    <View style={styles.scoreContainer}>
+                      <Text style={styles.scoreLabel}>SCORE</Text>
+                      <Text style={styles.scoreText}>{score.toLocaleString()}</Text>
+                    </View>
+                  )}
+
+                  {/* Game name */}
+                  <Text style={styles.gameNameText} numberOfLines={2}>{gameName}</Text>
+                </View>
+
+                {/* Powered by (if sponsor exists) */}
+                {(sponsorLogo || sponsorName) && (
+                  <View style={styles.sponsorContainer}>
+                    <Text style={styles.poweredByText}>Powered by</Text>
+                    {sponsorLogo && (
+                      <Image 
+                        source={typeof sponsorLogo === 'string' ? { uri: sponsorLogo } : sponsorLogo}
+                        style={styles.sponsorLogo}
+                        resizeMode="contain"
+                      />
+                    )}
+                    {sponsorName && !sponsorLogo && (
+                      <Text style={styles.sponsorNameText}>{sponsorName}</Text>
                     )}
                   </View>
-                </View>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          // Winner Card Preview
-          <View style={styles.cardPreviewContainer}>
-            <ViewShot ref={cardRef} options={{ format: 'png', quality: 1 }}>
-              <View style={styles.winnerCard}>
-                {/* Confetti Background */}
-                <LinearGradient
-                  colors={['#FFD700', '#FFA500', '#FF6B6B']}
-                  style={styles.cardGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  {/* Decorative elements */}
-                  <View style={styles.confettiContainer}>
-                    {['🎉', '⭐', '✨', '🎊', '💫', '🌟'].map((emoji, i) => (
-                      <Text 
-                        key={i} 
-                        style={[
-                          styles.confetti, 
-                          { 
-                            left: `${(i * 16) + 5}%`, 
-                            top: `${(i % 3) * 10 + 5}%`,
-                            transform: [{ rotate: `${i * 30}deg` }]
-                          }
-                        ]}
-                      >
-                        {emoji}
-                      </Text>
-                    ))}
-                  </View>
+                )}
 
-                  {/* Header */}
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.cardHeaderText}>TREASURE ISLAND</Text>
-                    <Text style={styles.cardHeaderSubtext}>CITY GAMES</Text>
-                  </View>
-
-                  {/* Winner Badge */}
-                  <View style={styles.winnerBadge}>
-                    <Text style={styles.positionEmoji}>{getPositionEmoji()}</Text>
-                    <Text style={styles.positionText}>{getPositionText()}</Text>
-                  </View>
-
-                  {/* Selfie Circle */}
-                  <View style={styles.selfieContainer}>
-                    <View style={styles.selfieFrame}>
-                      <Image source={{ uri: selfieUri }} style={styles.selfieImage} />
-                    </View>
-                  </View>
-
-                  {/* Winning Pig Mascot */}
-                  <View style={styles.mascotContainer}>
+                {/* Footer with app download CTA */}
+                <View style={styles.cardFooter}>
+                  <Text style={styles.footerCTA}>Think you can grab the cash?</Text>
+                  <View style={styles.downloadRow}>
                     <Image 
-                      source={require('../../assets/images/winningpig.png')} 
-                      style={styles.mascotImage}
+                      source={require('../../assets/images/appstorelogo.png')} 
+                      style={styles.appStoreLogo}
                       resizeMode="contain"
                     />
-                  </View>
-
-                  {/* Game Info */}
-                  <View style={styles.gameInfoContainer}>
-                    <Text style={styles.gameNameText} numberOfLines={2}>{gameName}</Text>
-                    {gameType === 'virtual' && score && (
-                      <Text style={styles.scoreText}>Score: {score.toLocaleString()}</Text>
-                    )}
-                    {prizeAmount > 0 && (
-                      <View style={styles.prizeContainer}>
-                        <Text style={styles.prizeText}>${prizeAmount}</Text>
-                        <Text style={styles.prizeLabel}>PRIZE</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Footer */}
-                  <View style={styles.cardFooter}>
-                    <Text style={styles.footerText}>Download the app & play!</Text>
-                    <Text style={styles.footerHashtag}>#TreasureIslandGames</Text>
-                  </View>
-                </LinearGradient>
-              </View>
-            </ViewShot>
-
-            {/* Win Confirmation Notice */}
-            <View style={styles.confirmationNotice}>
-              <Ionicons name="information-circle" size={20} color="#FFD700" />
-              <Text style={styles.confirmationNoticeText}>
-                Sharing your Winner Card selfie is required to confirm your win and receive your payout!
-              </Text>
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.actionButtons}>
-              <TouchableOpacity onPress={retakeSelfie} style={styles.retakeSelfieButton}>
-                <Ionicons name="camera" size={20} color="#FFF" />
-                <Text style={styles.retakeSelfieButtonText}>Take New Selfie</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={saveCardToGallery}
-                style={styles.saveButton}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <ActivityIndicator color="#FFF" size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="download" size={20} color="#FFF" />
-                    <Text style={styles.saveButtonText}>
-                      {cardSaved ? 'Saved!' : 'Save'}
+                    <Text style={styles.downloadText}>
+                      Download <Text style={styles.downloadAppName}>Grab The Cash</Text>
                     </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                  </View>
+                  <Text style={styles.footerHashtag}>{getHashtag()}</Text>
+                </View>
+
+                {/* Corner decorations */}
+                <View style={[styles.cornerDecor, styles.cornerTopLeft]} />
+                <View style={[styles.cornerDecor, styles.cornerTopRight]} />
+                <View style={[styles.cornerDecor, styles.cornerBottomLeft]} />
+                <View style={[styles.cornerDecor, styles.cornerBottomRight]} />
+              </LinearGradient>
             </View>
+          </ViewShot>
 
-            {/* Share Buttons */}
-            <Text style={styles.shareTitle}>Share Your Win!</Text>
-            <View style={styles.shareButtons}>
-              <TouchableOpacity onPress={shareToInstagram} style={[styles.shareButton, styles.instagramButton]}>
-                <Ionicons name="logo-instagram" size={28} color="#FFF" />
-                <Text style={styles.shareButtonText}>Instagram</Text>
-              </TouchableOpacity>
+          {/* Notice - different for cash winners vs achievement */}
+          <View style={[styles.confirmationNotice, isCashWinner && styles.cashNotice]}>
+            <Ionicons name="information-circle" size={20} color={isCashWinner ? '#10B981' : '#FFD700'} />
+            <Text style={[styles.confirmationNoticeText, isCashWinner && styles.cashNoticeText]}>
+              {isCashWinner 
+                ? 'Share your Winner Card on social media to confirm your win and receive your payout!'
+                : 'Share your achievement on social media and show off your skills!'
+              }
+            </Text>
+          </View>
 
-              <TouchableOpacity onPress={shareToTikTok} style={[styles.shareButton, styles.tiktokButton]}>
-                <Ionicons name="musical-notes" size={28} color="#FFF" />
-                <Text style={styles.shareButtonText}>TikTok</Text>
-              </TouchableOpacity>
+          {/* Save Button */}
+          <TouchableOpacity
+            onPress={saveCardToGallery}
+            style={[styles.saveButton, isCashWinner && styles.saveButtonCash]}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#FFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name={cardSaved ? 'checkmark-circle' : 'download'} size={22} color="#FFF" />
+                <Text style={styles.saveButtonText}>
+                  {cardSaved ? 'Saved to Gallery!' : 'Save to Gallery'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
 
-              <TouchableOpacity onPress={shareToFacebook} style={[styles.shareButton, styles.facebookButton]}>
-                <Ionicons name="logo-facebook" size={28} color="#FFF" />
-                <Text style={styles.shareButtonText}>Facebook</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity onPress={shareGeneric} style={styles.moreShareButton}>
-              <Ionicons name="share-outline" size={20} color="#FFF" />
-              <Text style={styles.moreShareText}>More sharing options</Text>
+          {/* Share Buttons */}
+          <Text style={styles.shareTitle}>Share Your {isCashWinner ? 'Win' : 'Achievement'}!</Text>
+          <View style={styles.shareButtons}>
+            <TouchableOpacity onPress={shareToInstagram} style={[styles.shareButton, styles.instagramButton]}>
+              <Ionicons name="logo-instagram" size={28} color="#FFF" />
+              <Text style={styles.shareButtonText}>Instagram</Text>
             </TouchableOpacity>
 
+            <TouchableOpacity onPress={shareToTikTok} style={[styles.shareButton, styles.tiktokButton]}>
+              <Ionicons name="musical-notes" size={28} color="#FFF" />
+              <Text style={styles.shareButtonText}>TikTok</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={shareToFacebook} style={[styles.shareButton, styles.facebookButton]}>
+              <Ionicons name="logo-facebook" size={28} color="#FFF" />
+              <Text style={styles.shareButtonText}>Facebook</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity onPress={shareGeneric} style={styles.moreShareButton}>
+            <Ionicons name="share-outline" size={20} color="#FFF" />
+            <Text style={styles.moreShareText}>More sharing options</Text>
+          </TouchableOpacity>
+
+          {isCashWinner && (
             <View style={styles.reminderBox}>
               <Text style={styles.reminderText}>
                 📸 Post your Winner Card on social media and save the link - you'll need it when requesting your payout!
               </Text>
             </View>
-          </View>
-        )}
+          )}
+        </View>
       </LinearGradient>
     </View>
   );
@@ -515,122 +416,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
   closeButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
     color: '#FFF',
-  },
-  // Camera styles
-  cameraContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  camera: {
-    width: SCREEN_WIDTH - 48,
-    height: SCREEN_WIDTH - 48,
-    borderRadius: 24,
-    overflow: 'hidden',
-  },
-  faceGuideContainer: {
-    position: 'absolute',
-    alignItems: 'center',
-  },
-  faceGuide: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    borderWidth: 4,
-    borderColor: '#FFD700',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  faceGuideInner: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-  },
-  faceGuideText: {
-    marginTop: 16,
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  captureButton: {
-    position: 'absolute',
-    bottom: 40,
-  },
-  captureButtonOuter: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  captureButtonInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noPermission: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  noPermissionText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 16,
-  },
-  noPermissionSubtext: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-    paddingHorizontal: 20,
-  },
-  requestPermissionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    backgroundColor: '#10B981',
-    borderRadius: 12,
-  },
-  requestPermissionButtonText: {
-    color: '#FFF',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  settingsButton: {
-    marginTop: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
-  },
-  settingsButtonText: {
-    color: '#FFF',
-    fontWeight: '600',
   },
   // Card preview styles
   cardPreviewContainer: {
@@ -645,13 +444,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: 15,
   },
   cardGradient: {
     flex: 1,
-    padding: 16,
+    padding: 20,
+    position: 'relative',
   },
   confettiContainer: {
     position: 'absolute',
@@ -659,99 +459,107 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    overflow: 'hidden',
   },
   confetti: {
     position: 'absolute',
-    fontSize: 24,
+    opacity: 0.6,
   },
-  cardHeader: {
+  // Brand header
+  brandHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'center',
+    marginBottom: 4,
+    gap: 10,
   },
-  cardHeaderText: {
+  brandName: {
     fontSize: 18,
     fontWeight: '900',
     color: '#FFF',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
+    letterSpacing: 1,
   },
-  cardHeaderSubtext: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.9)',
-    letterSpacing: 2,
+  brandDivider: {
+    width: 30,
+    height: 2,
+    backgroundColor: '#FFF',
+    borderRadius: 2,
+    opacity: 0.8,
   },
-  winnerBadge: {
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  positionEmoji: {
-    fontSize: 40,
-  },
-  positionText: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#FFF',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  selfieContainer: {
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  selfieFrame: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: '#FFF',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  selfieImage: {
-    width: '100%',
-    height: '100%',
-  },
+  // Central mascot - 2x bigger pig, smaller glow
   mascotContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 4,
+    position: 'relative',
+  },
+  mascotGlow: {
     position: 'absolute',
-    bottom: 60,
-    right: 8,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  mascotGlowCash: {
+    backgroundColor: 'rgba(16, 185, 129, 0.3)',
   },
   mascotImage: {
-    width: 90,
-    height: 110,
+    width: 240,
+    height: 280,
   },
-  gameInfoContainer: {
+  // Info container
+  infoContainer: {
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: -36,  // Shift up by 40px total
   },
-  gameNameText: {
-    fontSize: 14,
-    fontWeight: '800',
+  // Winner badge for cash winners
+  winnerBadgeContainer: {
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  winnerTrophy: {
+    fontSize: 36,
+  },
+  winnerLabel: {
+    fontSize: 22,
+    fontWeight: '900',
     color: '#FFF',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: 3,
+    letterSpacing: 2,
+  },
+  positionBadge: {
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  positionText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FFF',
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+    letterSpacing: 1,
+  },
+  scoreContainer: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 6,
+  },
+  scoreLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: 1,
   },
   scoreText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 2,
-  },
-  prizeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 8,
-  },
-  prizeText: {
     fontSize: 28,
     fontWeight: '900',
     color: '#FFF',
@@ -759,22 +567,73 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  prizeLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.8)',
-  },
-  cardFooter: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 11,
+  gameNameText: {
+    fontSize: 14,
     fontWeight: '700',
     color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  // Sponsor section (subtle "Powered by")
+  sponsorContainer: {
+    alignItems: 'center',
+    marginTop: 8,
+    paddingVertical: 4,
+  },
+  poweredByText: {
+    fontSize: 7,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 2,
+    textTransform: 'lowercase',
+    letterSpacing: 0.5,
+  },
+  sponsorLogo: {
+    width: 100,
+    height: 35, // 3:1 aspect ratio
+  },
+  sponsorNameText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.9)',
+  },
+  // Footer with subtle CTA
+  cardFooter: {
+    position: 'absolute',
+    bottom: 14,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  footerCTA: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)',
+    fontStyle: 'italic',
+    marginBottom: 6,
+  },
+  downloadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  appStoreLogo: {
+    width: 16,
+    height: 16,
+  },
+  downloadText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+  },
+  downloadAppName: {
+    fontWeight: '900',
+    textDecorationLine: 'underline',
+    color: '#FFFFFF',
   },
   footerHashtag: {
     fontSize: 10,
@@ -782,12 +641,42 @@ const styles = StyleSheet.create({
     color: '#FFF',
     marginTop: 2,
   },
-  // Action buttons
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
+  // Corner decorations
+  cornerDecor: {
+    position: 'absolute',
+    width: 25,
+    height: 25,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
+  cornerTopLeft: {
+    top: 10,
+    left: 10,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderTopLeftRadius: 6,
+  },
+  cornerTopRight: {
+    top: 10,
+    right: 10,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderTopRightRadius: 6,
+  },
+  cornerBottomLeft: {
+    bottom: 10,
+    left: 10,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomLeftRadius: 6,
+  },
+  cornerBottomRight: {
+    bottom: 10,
+    right: 10,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomRightRadius: 6,
+  },
+  // Confirmation notice
   confirmationNotice: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -799,6 +688,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 215, 0, 0.3)',
   },
+  cashNotice: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
   confirmationNoticeText: {
     flex: 1,
     fontSize: 13,
@@ -806,53 +699,35 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     lineHeight: 18,
   },
-  retakeSelfieButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#8B5CF6',
-    borderRadius: 12,
+  cashNoticeText: {
+    color: '#10B981',
   },
-  retakeSelfieButtonText: {
-    color: '#FFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  retakeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
-  },
-  retakeButtonText: {
-    color: '#FFF',
-    fontWeight: '700',
-  },
+  // Save button
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    gap: 8,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    backgroundColor: '#8B5CF6',
+    borderRadius: 14,
+    marginTop: 12,
+  },
+  saveButtonCash: {
     backgroundColor: '#10B981',
-    borderRadius: 12,
   },
   saveButtonText: {
     color: '#FFF',
     fontWeight: '700',
+    fontSize: 16,
   },
   // Share buttons
   shareTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#FFF',
-    marginTop: 20,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 10,
   },
   shareButtons: {
     flexDirection: 'row',
@@ -884,10 +759,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 16,
+    marginTop: 12,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 12,
   },
   moreShareText: {
@@ -895,48 +770,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   reminderBox: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
     borderRadius: 12,
     padding: 12,
-    marginTop: 16,
+    marginTop: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
   },
   reminderText: {
-    color: 'rgba(255,255,255,0.9)',
+    color: '#10B981',
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
     lineHeight: 18,
-  },
-  // Web fallback
-  webFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  webFallbackTitle: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: '#FFF',
-    marginBottom: 16,
-  },
-  webFallbackText: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  webCloseButton: {
-    marginTop: 24,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
-  },
-  webCloseButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
   },
 });
 

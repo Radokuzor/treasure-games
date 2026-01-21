@@ -37,7 +37,7 @@ const TermsScreen = ({ navigation }) => {
           <Text style={styles.lastUpdated}>Last Updated: January 1, 2026</Text>
 
           <Text style={styles.paragraph}>
-            Welcome to Treasure Island City Games. By accessing our app or website, you agree to the following terms:
+            Welcome to Grab The Cash. By accessing our app or website, you agree to the following terms:
           </Text>
 
           <Text style={styles.sectionTitle}>1. Eligibility</Text>
@@ -47,7 +47,7 @@ const TermsScreen = ({ navigation }) => {
 
           <Text style={styles.sectionTitle}>2. Zero-Tolerance Safety Policy (Guideline 1.2)</Text>
           <Text style={styles.paragraph}>
-            Treasure Island City Games maintains a zero-tolerance policy regarding objectionable content and abusive behavior.
+            Grab The Cash maintains a zero-tolerance policy regarding objectionable content and abusive behavior.
           </Text>
 
           <Text style={styles.subsectionTitle}>Prohibited Content:</Text>
@@ -72,7 +72,7 @@ const TermsScreen = ({ navigation }) => {
 
           <Text style={styles.sectionTitle}>4. Apple Inc. Disclaimer</Text>
           <Text style={styles.paragraph}>
-            Apple Inc. is not a sponsor of, or involved in, any contests, games, or prizes within this application. All promotions are sponsored solely by Treasure Island City Games and its brand partners.
+            Apple Inc. is not a sponsor of, or involved in, any contests, games, or prizes within this application. All promotions are sponsored solely by Grab The Cash and its brand partners.
           </Text>
 
           <Text style={styles.sectionTitle}>5. Account Termination</Text>

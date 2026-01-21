@@ -849,7 +849,7 @@ const OnboardingScreen = ({ navigation }) => {
                     style={styles.eulaLink}
                     onPress={() => {
                       if (Platform.OS === 'web') {
-                        window.open('https://treasure-island-city-games.vercel.app/terms', '_blank');
+                        window.open('/terms', '_blank');
                       } else {
                         navigation.navigate('Terms');
                       }
@@ -862,7 +862,7 @@ const OnboardingScreen = ({ navigation }) => {
                     style={styles.eulaLink}
                     onPress={() => {
                       if (Platform.OS === 'web') {
-                        window.open('https://treasure-island-city-games.vercel.app/privacy', '_blank');
+                        window.open('/privacy', '_blank');
                       } else {
                         navigation.navigate('Privacy');
                       }
@@ -892,7 +892,7 @@ const OnboardingScreen = ({ navigation }) => {
                   )}
                 </View>
                 <Text style={styles.smsText}>
-                  I agree to receive automated promo texts from Treasure Island City Games. Consent not a condition of purchase. Msg freq varies. Msg & data rates may apply. Reply STOP to opt out.
+                  I agree to receive automated promo texts from Grab The Cash. Consent not a condition of purchase. Msg freq varies. Msg & data rates may apply. Reply STOP to opt out.
                 </Text>
               </TouchableOpacity>
 

@@ -70,9 +70,9 @@ const ForceUpdateScreen = ({
 
           {/* Message */}
           <Text style={styles.message}>
-            {updateMessage || (isForced 
-              ? 'Your app version is no longer supported. Please update to continue using Treasure Island City Games.'
-              : 'A new version of Treasure Island City Games is available with exciting new features and improvements!'
+{updateMessage || (isForced
+              ? 'Your app version is no longer supported. Please update to continue using Grab The Cash.'
+              : 'A new version of Grab The Cash is available with exciting new features and improvements!'
             )}
           </Text>
 

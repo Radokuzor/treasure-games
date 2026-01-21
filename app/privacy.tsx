@@ -63,7 +63,7 @@ export default function PrivacyPage() {
           <Text style={styles.sectionTitle}>SMS Communications</Text>
           <View style={styles.highlightBox}>
             <Text style={styles.highlightText}>
-              SMS Disclosure: By providing your phone number and opting in, you consent to receive automated promotional text messages from Treasure Island City Games. Consent is not a condition of purchase or participation. Message frequency varies. Message and data rates may apply. You can opt out at any time by replying STOP to any message. For help, reply HELP. View our Privacy Policy and Terms of Service for more details.
+              SMS Disclosure: By providing your phone number and opting in, you consent to receive automated promotional text messages from Grab The Cash. Consent is not a condition of purchase or participation. Message frequency varies. Message and data rates may apply. You can opt out at any time by replying STOP to any message. For help, reply HELP. View our Privacy Policy and Terms of Service for more details.
             </Text>
           </View>
 
@@ -93,7 +93,7 @@ export default function PrivacyPage() {
               Operated by Fourth Watch Technologies LLC
             </Text>
             <Text style={styles.footerText}>
-              Treasure Island City Games
+              Grab The Cash
             </Text>
             <Text style={styles.footerText}>
               Contact: admin@fourthwatchtech.com

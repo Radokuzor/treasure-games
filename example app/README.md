@@ -1,4 +1,4 @@
-# 🏆 Treasure Hunt App - UI Components
+# 🏆 Grab The Cash App - UI Components
 
 A beautiful React Native mobile app for city-wide treasure hunts with real-time location tracking, video sharing, and multiple gradient themes.
 

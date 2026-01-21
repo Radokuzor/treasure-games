@@ -1,6 +1,6 @@
 # Web/PWA Deployment Guide
 
-Your Treasure Island City Games app now has full PWA (Progressive Web App) support! 🎉
+Your Grab The Cash app now has full PWA (Progressive Web App) support! 🎉
 
 ## What Was Done
 
@@ -79,7 +79,7 @@ Option 1: Vercel (Current Setup - Easiest)
 You're already set up with Vercel! Just run:
 
 vercel --prod --yes
-Your PWA will be live at: https://treasure-island-city-games.vercel.app
+Your PWA will be live at your Vercel deployment URL
 Option 2: Preview Deployment (for testing before production)
 
 vercel
@@ -174,7 +174,7 @@ cd dist && netlify deploy --prod
 1. **HTTPS Required**: Location tracking on web requires HTTPS. All major hosting platforms (Netlify, Vercel, Firebase) provide SSL/HTTPS automatically.
 
 2. **Full Feature Parity**: The web version now has feature parity with mobile apps:
-   - Play location-based treasure hunt games
+   - Play location-based games and Battle Royale
    - View interactive maps with live game locations
    - Upload profile photos and game clues
    - Track your location in real-time during games

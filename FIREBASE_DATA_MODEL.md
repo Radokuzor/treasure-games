@@ -1,7 +1,7 @@
 # Firebase Data Model for HoodGames
 
 ## Overview
-This document describes the complete Firebase Firestore data model for the HoodGames treasure hunt application.
+This document describes the complete Firebase Firestore data model for the Grab The Cash application.
 
 ---
 
@@ -89,6 +89,10 @@ Stores all game information including location-based and virtual games.
   difficulty: 'easy' | 'medium' | 'hard',
   status: 'pending' | 'scheduled' | 'live' | 'completed' | 'inactive',
   scheduledTime: string | null,     // ISO datetime string
+  
+  // Sponsor Info (optional)
+  sponsorName: string | null,       // Sponsor company name
+  sponsorLogo: string | null,       // URL to sponsor logo in Firebase Storage
   createdAt: Timestamp,
   updatedAt: Timestamp,
   launchedAt: Timestamp | null,     // When game went live
@@ -210,9 +214,9 @@ Stores all game information including location-based and virtual games.
 ```json
 {
   "type": "location",
-  "name": "Downtown Treasure Hunt",
+  "name": "Downtown Cash Hunt",
   "prizeAmount": 500,
-  "description": "Find the hidden treasure in downtown!",
+  "description": "Race to downtown and win!",
   "city": "San Francisco",
   "difficulty": "medium",
   "status": "live",
@@ -468,7 +472,7 @@ service cloud.firestore {
 
 ### Overview
 
-Mini-game challenges are optional features for location-based games. When configured, players must complete a mini-game challenge when they arrive at the treasure location (within the accuracy radius) before they can win.
+Mini-game challenges are optional features for location-based games. When configured, players must complete a mini-game challenge when they arrive at the game location (within the accuracy radius) before they can win.
 
 ### Benefits
 

@@ -522,7 +522,7 @@ const AuthScreen = ({ navigation }) => {
             style={styles.eulaLink}
             onPress={() => {
               if (Platform.OS === 'web') {
-                window.open('https://treasure-island-city-games.vercel.app/terms', '_blank');
+                window.open('/terms', '_blank');
               } else {
                 navigation.navigate('Terms');
               }
@@ -535,7 +535,7 @@ const AuthScreen = ({ navigation }) => {
             style={styles.eulaLink}
             onPress={() => {
               if (Platform.OS === 'web') {
-                window.open('https://treasure-island-city-games.vercel.app/privacy', '_blank');
+                window.open('/privacy', '_blank');
               } else {
                 navigation.navigate('Privacy');
               }
@@ -557,7 +557,7 @@ const AuthScreen = ({ navigation }) => {
           {agreedToSMS && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
         </View>
         <Text style={styles.smsText}>
-          I agree to receive automated promo texts from Treasure Island City Games. Consent not a condition of purchase. Msg freq varies. Msg & data rates may apply. Reply STOP to opt out.
+          I agree to receive automated promo texts from Grab The Cash. Consent not a condition of purchase. Msg freq varies. Msg & data rates may apply. Reply STOP to opt out.
         </Text>
       </TouchableOpacity>
 
@@ -600,8 +600,8 @@ const AuthScreen = ({ navigation }) => {
                 <LinearGradient colors={['#00D4E5', '#00E5CC']} style={styles.logoCircle}>
                   <Ionicons name="location" size={40} color="#FFF" />
                 </LinearGradient>
-                <Text style={styles.headerTitle}>Treasure Island</Text>
-                <Text style={styles.headerSubtitle}>City Games</Text>
+                <Text style={styles.headerTitle}>Grab The Cash</Text>
+                <Text style={styles.headerSubtitle}>Win Real Prizes</Text>
               </View>
 
               {/* Form */}

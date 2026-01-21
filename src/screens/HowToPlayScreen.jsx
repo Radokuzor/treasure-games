@@ -56,7 +56,7 @@ const HowToPlayScreen = ({ navigation }) => {
         >
           <Text style={styles.heroTitle}>Play Smart. Win Fast.</Text>
           <Text style={styles.heroSubtitle}>
-            Treasure Island City Games offers two ways to play: Location hunts and Virtual Battle Royale competitions. This guide explains everything you need to know!
+            Grab The Cash offers two ways to play: Location hunts and Virtual Battle Royale competitions. This guide explains everything you need to know!
           </Text>
         </LinearGradient>
 
@@ -73,7 +73,7 @@ const HowToPlayScreen = ({ navigation }) => {
         </Section>
 
         <Section title="Location Games" icon="📍">
-          <Bullet>Use photo clues to find the hidden treasure location.</Bullet>
+          <Bullet>Use photo clues to find the hidden game location.</Bullet>
           <Bullet>Your GPS must verify you're at the correct spot.</Bullet>
           <Bullet>Complete the mini-game challenge when you arrive.</Bullet>
           <Bullet>First players to arrive and complete the challenge win!</Bullet>
@@ -171,7 +171,7 @@ const HowToPlayScreen = ({ navigation }) => {
         </Section>
 
         <Text style={[styles.footer, { color: theme.colors.textSecondary }]}>
-          By playing Treasure Island City Games, you agree to follow these rules. Updates may be made to keep gameplay
+          By playing Grab The Cash, you agree to follow these rules. Updates may be made to keep gameplay
           fair and safe. Good luck and happy hunting! 🎉
         </Text>
       </ScrollView>

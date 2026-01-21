@@ -47,7 +47,7 @@ const RECENT_WINNERS = [
     location: 'Central Park',
     time: '2 mins',
     avatar: '👩‍🦰',
-    description: 'Found the treasure near the fountain in record time!',
+    description: 'Won near the fountain in record time!',
   },
   {
     id: '2',

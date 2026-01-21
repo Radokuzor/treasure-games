@@ -1,8 +1,8 @@
-# HoodGames / Treasure Island - AI Onboarding Guide
+# HoodGames / Grab The Cash - AI Onboarding Guide
 
 **Version**: 1.0.0
 **Last Updated**: January 2026
-**Project**: Treasure Island City Games (HoodGames)
+**Project**: Grab The Cash (HoodGames)
 **Purpose**: Comprehensive onboarding documentation for AI tools and assistants
 
 ---
@@ -31,10 +31,10 @@
 
 ### What is HoodGames?
 
-**HoodGames (Treasure Island City Games)** is a location-based, real-time treasure hunt gaming platform where players:
-- 🗺️ Compete to find virtual treasure at real-world locations
-- 💰 Win real cash prizes by being first to find the treasure
-- 📸 View photo clues that reveal the treasure location
+**HoodGames (Grab The Cash)** is a location-based, real-time gaming platform where players:
+- 🗺️ Compete in real-world location games and virtual Battle Royale
+- 💰 Win real cash prizes by being first to complete objectives
+- 📸 View photo clues that reveal game locations
 - 🏆 Track their progress on live leaderboards
 - 🌍 Play games in their city
 
@@ -223,11 +223,11 @@ HoodGames/
 
 ## 5. Core Features
 
-### 1. Location-Based Treasure Hunts
+### 1. Location-Based Games
 **How it works**:
 - Admin creates game with GPS coordinates and photo clues
 - Players view clue photos and navigate to location
-- Real-time distance calculation to treasure
+- Real-time distance calculation to game location
 - First X players to reach location within accuracy radius win
 - Winner slots configurable (default: 3)
 
@@ -406,7 +406,7 @@ useEffect(() => {
 **Key Features**:
 - Top 5 leaderboard (by total earnings)
 - Recent winners display (last 3)
-- Active treasure drops on map
+- Active game drops on map
 - City-specific game filtering
 - Unified map component (UnifiedMapView)
 - Tab navigation: Live Games, Leaderboard, Winners
@@ -515,7 +515,7 @@ await runTransaction(db, async (transaction) => {
 - Uses `expo-sensors` magnetometer
 - Shows 7 seconds, hides 5 seconds (configurable per user)
 - Arrow rotates based on device heading
-- Points toward treasure location
+- Points toward game location
 
 ---
 
@@ -794,7 +794,7 @@ else {
 >
   <UnifiedMarker
     coordinate={{ latitude: 37.78825, longitude: -122.4324 }}
-    title="Treasure Here"
+    title="Prize Here"
   />
 
   <UnifiedCircle
@@ -877,9 +877,9 @@ else {
 ```json
 {
   "type": "location",
-  "name": "Downtown Treasure Hunt",
+  "name": "Downtown Cash Hunt",
   "prizeAmount": 500,
-  "description": "Find the hidden treasure!",
+  "description": "Race to the location and win!",
   "city": "San Francisco",
   "difficulty": "medium",
   "status": "live",
@@ -1470,8 +1470,8 @@ if (Platform.OS === 'web') {
     "startUrl": "/",
     "themeColor": "#00D4E5",
     "backgroundColor": "#00D4E5",
-    "name": "Treasure Island City Games",
-    "shortName": "Treasure"
+    "name": "Grab The Cash",
+    "shortName": "Grab Cash"
   }
 }
 ```
@@ -1623,7 +1623,7 @@ vercel --prod --yes
 - `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
 - `EXPO_PUBLIC_FIREBASE_APP_ID`
 
-**Live URL**: https://treasure-island-city-games.vercel.app
+**Live URL**: https://grabthecash.app (or current Vercel deployment)
 
 ---
 
@@ -1941,7 +1941,7 @@ npx expo config
 
 ## Summary
 
-HoodGames is a **sophisticated, cross-platform treasure hunt gaming application** built with:
+HoodGames is a **sophisticated, cross-platform gaming application** built with:
 
 ✅ **React Native 0.81 + Expo 54**
 ✅ **Firebase backend** (Auth, Firestore, Storage)

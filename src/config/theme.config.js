@@ -1,4 +1,4 @@
-// Theme Configuration for Treasure Hunt App
+// Theme Configuration for Grab The Cash App
 // Supports multiple gradient-based themes
 
 export const THEMES = {

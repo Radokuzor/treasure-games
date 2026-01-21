@@ -1,7 +1,7 @@
 {
-  "name": "Treasure Island City Games",
-  "short_name": "Treasure",
-  "description": "Find treasure hunts near you and win real prizes!",
+  "name": "Grab The Cash",
+  "short_name": "Grab Cash",
+  "description": "Compete in real-world games and win real prizes!",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

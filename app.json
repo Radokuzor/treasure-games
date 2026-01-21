@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Treasure",
+    "name": "Grab The Cash",
     "slug": "HoodGames",
     "version": "1.0.7",
     "orientation": "portrait",
@@ -12,12 +12,12 @@
       "supportsTablet": false,
       "buildNumber": "10",
       "infoPlist": {
-        "CFBundleDisplayName": "Treasure",
-        "NSLocationWhenInUseUsageDescription": "Treasure Island Games uses your location to help you find treasure hunts nearby.",
-        "NSCameraUsageDescription": "Treasure Island needs camera access to take your winner selfie for the Winner Card and upload profile pictures.",
-        "NSPhotoLibraryUsageDescription": "Treasure Island needs access to your photos to set your profile picture and save your Winner Card.",
-        "NSPhotoLibraryAddUsageDescription": "Treasure Island needs permission to save your Winner Card to your photo library.",
-        "NSMicrophoneUsageDescription": "Treasure Island uses the microphone for video content.",
+        "CFBundleDisplayName": "Grab The Cash",
+        "NSLocationWhenInUseUsageDescription": "Grab The Cash uses your location to help you find games nearby and compete for prizes.",
+        "NSCameraUsageDescription": "Grab The Cash needs camera access to take your Winner Card photo and upload profile pictures.",
+        "NSPhotoLibraryUsageDescription": "Grab The Cash needs access to your photos to set your profile picture and save your Winner Card.",
+        "NSPhotoLibraryAddUsageDescription": "Grab The Cash needs permission to save your Winner Card to your photo library.",
+        "NSMicrophoneUsageDescription": "Grab The Cash uses the microphone for video content.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.kingkuz.hoodgames",
@@ -56,9 +56,9 @@
       "favicon": "./assets/images/favicon.png",
       "bundler": "metro",
       "backgroundColor": "#00D4E5",
-      "name": "Treasure Island City Games",
-      "shortName": "Treasure",
-      "description": "Find treasure hunts near you and win real prizes!",
+      "name": "Grab The Cash",
+      "shortName": "Grab Cash",
+      "description": "Compete in real-world games and win real prizes!",
       "display": "standalone",
       "startUrl": "/",
       "themeColor": "#00D4E5",
@@ -69,8 +69,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Treasure Island needs camera access to take your winner selfie for the Winner Card.",
-          "microphonePermission": "Treasure Island needs microphone access for video content.",
+          "cameraPermission": "Grab The Cash needs camera access to take your Winner Card photo.",
+          "microphonePermission": "Grab The Cash needs microphone access for video content.",
           "recordAudioAndroid": true
         }
       ],
@@ -83,14 +83,14 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "HoodGames needs your location to show nearby treasure hunts."
+          "locationAlwaysAndWhenInUsePermission": "Grab The Cash needs your location to find games near you."
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "Treasure Island needs access to your photos to save your Winner Card.",
-          "savePhotosPermission": "Treasure Island needs permission to save your Winner Card to your photo library.",
+          "photosPermission": "Grab The Cash needs access to your photos to save your Winner Card.",
+          "savePhotosPermission": "Grab The Cash needs permission to save your Winner Card to your photo library.",
           "isAccessMediaLocationEnabled": true
         }
       ],
@@ -109,7 +109,7 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "cover",
-          "backgroundColor": "#00D4E5"
+          "backgroundColor": "#4CAF50"
         }
       ],
       "expo-av"

@@ -1,7 +1,7 @@
 # HoodGames - Complete Testing Guide
 
 ## Overview
-This guide covers end-to-end testing of the HoodGames treasure hunt application with the newly implemented features.
+This guide covers end-to-end testing of the Grab The Cash application with the newly implemented features.
 
 ---
 
@@ -67,7 +67,7 @@ This guide covers end-to-end testing of the HoodGames treasure hunt application 
 3. **Create a location-based game**:
    - Select "Location Based" game type
    - Fill in game details:
-     - Name: "Test Treasure Hunt"
+     - Name: "Test Cash Hunt"
      - Prize Amount: 500
      - City: Your current city
      - Difficulty: Medium
@@ -348,7 +348,7 @@ After all winner slots filled:
 ```javascript
 {
   type: "location",
-  name: "Test Treasure Hunt",
+  name: "Test Cash Hunt",
   prizeAmount: 500,
   status: "live",  // changes to "completed"
   location: {

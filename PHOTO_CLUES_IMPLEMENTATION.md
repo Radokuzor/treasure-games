@@ -1,7 +1,7 @@
 # Photo Clues Feature - Implementation Complete ✅
 
 ## Overview
-The admin panel now supports **photo-based clues** instead of text clues. Admins can upload 5-10 photos that will be displayed as a slideshow to players during location-based treasure hunt games.
+The admin panel now supports **photo-based clues** instead of text clues. Admins can upload 5-10 photos that will be displayed as a slideshow to players during location-based games.
 
 ---
 
