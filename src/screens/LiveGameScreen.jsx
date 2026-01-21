@@ -48,6 +48,7 @@ import { getFirebaseAuth, getFirebaseDb } from '../config/firebase';
 import MiniGameWebView from '../components/MiniGameWebView';
 import WinnerCardScreen from './WinnerCardScreen';
 import { checkWinEligibility, recordDailyWin, processBattleRoyaleWinners } from '../utils/winEligibility';
+import { sendPushNotification } from '../notificationService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CAROUSEL_HEIGHT = 400;
@@ -138,7 +139,7 @@ export default function LiveGameScreen({ route, navigation }) {
   };
 
   const showToast = useCallback(
-    (message) => {
+    (message, duration = 2600) => {
       setToastMessage(message);
       try {
         if (toastTimeoutRef.current) {
@@ -163,7 +164,7 @@ export default function LiveGameScreen({ route, navigation }) {
           }).start(() => {
             setToastMessage('');
           });
-        }, 2600);
+        }, duration);
       } catch (_error) {
         // no-op
       }
@@ -419,8 +420,8 @@ export default function LiveGameScreen({ route, navigation }) {
 
         if (!result.eligible && result.message) {
           setEligibilityMessage(result.message);
-          // Show toast when they open the game
-          showToast(result.message);
+          // Show toast when they open the game - 10 seconds for important warning
+          showToast(result.message, 10000);
         }
 
         console.log('🎯 Win eligibility check:', result.eligible ? 'ELIGIBLE' : 'NOT ELIGIBLE');
@@ -475,8 +476,8 @@ export default function LiveGameScreen({ route, navigation }) {
         
         const gameRef = doc(db, 'games', gameId);
         
-        // Process winners and award prizes
-        const winners = await processBattleRoyaleWinners(db, { ...game, id: gameId });
+        // Process winners and award prizes (with push notifications)
+        const winners = await processBattleRoyaleWinners(db, { ...game, id: gameId }, sendPushNotification);
         
         // Mark game as completed with winner info
         await updateDoc(gameRef, {
@@ -1150,6 +1151,7 @@ export default function LiveGameScreen({ route, navigation }) {
               city: game.city || null,
               sponsorLogo: game.sponsorLogo || null,
               sponsorName: game.sponsorName || null,
+              isCompetitionActive: true, // Competition is still ongoing
             });
             setShowWinnerCard(true);
           }, 1500);
@@ -1198,7 +1200,7 @@ export default function LiveGameScreen({ route, navigation }) {
       if (!eligibility.eligible) {
         // User already won today - let them know but don't add to winners
         console.log('🚫 User not eligible for win (daily limit):', eligibility.reason);
-        showToast(eligibility.message || "You've already won today! Great game though!");
+        showToast(eligibility.message || "You've already won today! Great game though!", 10000);
         return;
       }
 
@@ -1290,6 +1292,7 @@ export default function LiveGameScreen({ route, navigation }) {
               city: game.city || null,
               sponsorLogo: game.sponsorLogo || null,
               sponsorName: game.sponsorName || null,
+              isCompetitionActive: false, // Location games are instant wins
             });
             setShowWinnerCard(true);
           }, 2000); // Delay to let celebration play
@@ -1832,7 +1835,7 @@ export default function LiveGameScreen({ route, navigation }) {
                 </TouchableOpacity>
               )}
 
-              {/* Winner Card Selfie Button - for users currently in top 3 */}
+              {/* Winner Card Button - for users currently in top 3 */}
               {userRank && userRank <= 3 && !showMiniGame && (
                 <View style={styles.topThreeWinnerCardSection}>
                   <TouchableOpacity
@@ -1847,6 +1850,7 @@ export default function LiveGameScreen({ route, navigation }) {
                         city: game.city || null,
                         sponsorLogo: game.sponsorLogo || null,
                         sponsorName: game.sponsorName || null,
+                        isCompetitionActive: true, // Competition is still ongoing
                       });
                       setShowWinnerCard(true);
                     }}
@@ -1858,9 +1862,9 @@ export default function LiveGameScreen({ route, navigation }) {
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                     >
-                      <Ionicons name="camera" size={20} color="#FFFFFF" />
+                      <Ionicons name="trophy" size={20} color="#FFFFFF" />
                       <Text style={styles.topThreeWinnerCardText}>
-                        📸 Take Winner Card Selfie
+                        🎉 Get Winner Card
                       </Text>
                     </LinearGradient>
                   </TouchableOpacity>
@@ -1885,7 +1889,7 @@ export default function LiveGameScreen({ route, navigation }) {
                     : 'Thanks for playing!'}
               </Text>
               
-              {/* Winner Card Selfie Button - for top 3 finishers */}
+              {/* Winner Card Button - for top 3 finishers */}
               {userRank && userRank <= 3 && (
                 <TouchableOpacity
                   activeOpacity={0.85}
@@ -1900,6 +1904,7 @@ export default function LiveGameScreen({ route, navigation }) {
                       city: game.city || null,
                       sponsorLogo: game.sponsorLogo || null,
                       sponsorName: game.sponsorName || null,
+                      isCompetitionActive: false, // Competition has ended
                     });
                     setShowWinnerCard(true);
                   }}
@@ -1911,8 +1916,8 @@ export default function LiveGameScreen({ route, navigation }) {
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                   >
-                    <Ionicons name="camera" size={24} color="#FFFFFF" />
-                    <Text style={styles.winnerCardButtonTextLarge}>Take Winner Card Selfie</Text>
+                    <Ionicons name="trophy" size={24} color="#FFFFFF" />
+                    <Text style={styles.winnerCardButtonTextLarge}>Get Winner Card</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               )}
@@ -1964,7 +1969,7 @@ export default function LiveGameScreen({ route, navigation }) {
                 <Text style={styles.winnerText}>🎉 You Won!</Text>
               </View>
               
-              {/* Take Winner Card Selfie Button */}
+              {/* Get Winner Card Button */}
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={() => {
@@ -1977,6 +1982,7 @@ export default function LiveGameScreen({ route, navigation }) {
                     city: game.city || null,
                     sponsorLogo: game.sponsorLogo || null,
                     sponsorName: game.sponsorName || null,
+                    isCompetitionActive: false, // This button only shows when user already won
                   });
                   setShowWinnerCard(true);
                 }}
@@ -1988,8 +1994,8 @@ export default function LiveGameScreen({ route, navigation }) {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
-                  <Ionicons name="camera" size={20} color="#FFFFFF" />
-                  <Text style={styles.winnerCardButtonText}>Take Winner Card Selfie</Text>
+                  <Ionicons name="trophy" size={20} color="#FFFFFF" />
+                  <Text style={styles.winnerCardButtonText}>Get Winner Card</Text>
                 </LinearGradient>
               </TouchableOpacity>
               <Text style={styles.winnerCardHint}>Required to claim your prize!</Text>
@@ -2193,6 +2199,7 @@ export default function LiveGameScreen({ route, navigation }) {
           city={winnerCardData.city}
           sponsorLogo={winnerCardData.sponsorLogo}
           sponsorName={winnerCardData.sponsorName}
+          isCompetitionActive={winnerCardData.isCompetitionActive || false}
         />
       )}
     </LinearGradient>

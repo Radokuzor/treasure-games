@@ -167,13 +167,15 @@ export const getUserWinStats = async (db, userId) => {
 
 /**
  * Process battle royale winners when competition ends
- * Awards prizes to top players based on prize distribution
+ * Awards prizes to top ELIGIBLE players based on prize distribution
+ * Skips ineligible players (already won today) and moves to next eligible
  * 
  * @param {Firestore} db - Firestore database instance
  * @param {Object} game - The game document data
+ * @param {Function} sendNotification - Optional function to send push notifications
  * @returns {Promise<Array>} Array of winner objects with prize amounts
  */
-export const processBattleRoyaleWinners = async (db, game) => {
+export const processBattleRoyaleWinners = async (db, game, sendNotification = null) => {
   try {
     if (!game || !game.leaderboard || game.leaderboard.length === 0) {
       console.log('No leaderboard entries to process');
@@ -194,11 +196,24 @@ export const processBattleRoyaleWinners = async (db, game) => {
 
     const winners = [];
     const claimDeadline = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
+    let positionAwarded = 0;
+    let leaderboardIndex = 0;
 
-    // Process top N winners
-    for (let i = 0; i < Math.min(winnerSlots, sortedLeaderboard.length); i++) {
-      const entry = sortedLeaderboard[i];
-      const position = i + 1;
+    // Process winners - skip ineligible players and find next eligible
+    while (positionAwarded < winnerSlots && leaderboardIndex < sortedLeaderboard.length) {
+      const entry = sortedLeaderboard[leaderboardIndex];
+      leaderboardIndex++;
+
+      // Check if this player is eligible to win (hasn't won today)
+      const eligibility = await checkWinEligibility(db, entry.oderId);
+      
+      if (!eligibility.eligible) {
+        console.log(`⏭️ Skipping ${entry.username} - ${eligibility.reason}: ${eligibility.message}`);
+        continue; // Skip to next player
+      }
+
+      positionAwarded++;
+      const position = positionAwarded;
       const prizePercent = prizeDistribution[position] || 0;
       const winnerPrize = Math.round(prizeAmount * prizePercent / 100);
 
@@ -212,11 +227,12 @@ export const processBattleRoyaleWinners = async (db, game) => {
         claimDeadline,
         claimed: false,
         notifiedAt: new Date(),
+        leaderboardPosition: leaderboardIndex, // Original position on leaderboard
       };
 
       winners.push(winner);
 
-      // Update user's balance (they can claim later)
+      // Update user's balance and record daily win
       try {
         const userRef = doc(db, 'users', entry.oderId);
         await updateDoc(userRef, {
@@ -228,13 +244,62 @@ export const processBattleRoyaleWinners = async (db, game) => {
             prizeAmount: winnerPrize,
             claimDeadline,
             claimed: false,
+            sponsorLogo: game.sponsorLogo || null,
+            sponsorName: game.sponsorName || null,
+            city: game.city || null,
+          },
+          // Flag to show winner card on next app open
+          pendingWinnerCard: {
+            gameId: game.id,
+            gameName: game.name,
+            position,
+            prizeAmount: winnerPrize,
+            gameType: 'virtual',
+            wonMoney: true,
+            city: game.city || null,
+            sponsorLogo: game.sponsorLogo || null,
+            sponsorName: game.sponsorName || null,
+            createdAt: new Date(),
           },
           updatedAt: serverTimestamp(),
         });
+
+        // Record daily win to prevent multiple wins
+        await recordDailyWin(db, entry.oderId, game.id, game.name, winnerPrize);
+
         console.log(`✅ Winner #${position}: ${entry.username} - $${winnerPrize}`);
+
+        // Send push notification if function provided
+        if (sendNotification && entry.oderId) {
+          try {
+            // Get user's push token
+            const userDoc = await getDoc(userRef);
+            const userData = userDoc.data();
+            if (userData?.pushToken) {
+              await sendNotification({
+                to: userData.pushToken,
+                title: '🎉 You Won!',
+                body: `Congratulations! You finished #${position} in "${game.name}" and won $${winnerPrize}! Open the app to claim your prize.`,
+                data: {
+                  type: 'battle_royale_win',
+                  gameId: game.id,
+                  position,
+                  prizeAmount: winnerPrize,
+                },
+              });
+              console.log(`📱 Notification sent to ${entry.username}`);
+            }
+          } catch (notifError) {
+            console.error(`Error sending notification to ${entry.username}:`, notifError);
+          }
+        }
       } catch (userError) {
         console.error(`Error updating winner ${entry.oderId}:`, userError);
       }
+    }
+
+    if (winners.length < winnerSlots) {
+      console.log(`⚠️ Only ${winners.length} eligible winners found out of ${winnerSlots} slots`);
     }
 
     return winners;

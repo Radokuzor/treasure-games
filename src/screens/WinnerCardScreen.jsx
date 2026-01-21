@@ -9,6 +9,7 @@ import {
   Image,
   Linking,
   Platform,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -32,6 +33,7 @@ const WinnerCardScreen = ({
   city = null,     // City name for hashtag
   sponsorLogo = null,
   sponsorName = null,
+  isCompetitionActive = false, // Is Battle Royale still ongoing?
 }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [cardSaved, setCardSaved] = useState(false);
@@ -61,7 +63,7 @@ const WinnerCardScreen = ({
   // Get gradient colors based on card type and position
   const getCardGradient = () => {
     if (isCashWinner) {
-      return ['#10B981', '#059669', '#047857']; // Green for cash winners
+      return ['#00F5A0', '#00D9F5', '#00B4D8']; // Vibrant neon green-teal gradient for cash winners
     }
     if (position === 1) return ['#FFD700', '#FFA500', '#FF8C00']; // Gold
     if (position === 2) return ['#C0C0C0', '#A8A8A8', '#8B8B8B']; // Silver
@@ -201,18 +203,24 @@ const WinnerCardScreen = ({
   return (
     <View style={styles.container}>
       <LinearGradient colors={['#1A1A2E', '#16213E', '#0F3460']} style={styles.gradient}>
-        {/* Header */}
+        {/* Header - X button on right */}
         <View style={styles.header}>
+          <View style={{ width: 44 }} />
+          <Text style={styles.headerTitle}>🎉 Congrats!</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={28} color="#FFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>🎉 Congrats!</Text>
-          <View style={{ width: 44 }} />
         </View>
 
-        {/* Winner Card */}
-        <View style={styles.cardPreviewContainer}>
-          <ViewShot ref={cardRef} options={{ format: 'png', quality: 1 }}>
+        {/* Scrollable Content */}
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Winner Card */}
+          <View style={styles.cardPreviewContainer}>
+            <ViewShot ref={cardRef} options={{ format: 'png', quality: 1 }}>
             <View style={styles.winnerCard}>
               <LinearGradient
                 colors={getCardGradient()}
@@ -290,22 +298,25 @@ const WinnerCardScreen = ({
                   <Text style={styles.gameNameText} numberOfLines={2}>{gameName}</Text>
                 </View>
 
-                {/* Powered by (if sponsor exists) */}
-                {(sponsorLogo || sponsorName) && (
-                  <View style={styles.sponsorContainer}>
-                    <Text style={styles.poweredByText}>Powered by</Text>
-                    {sponsorLogo && (
-                      <Image 
-                        source={typeof sponsorLogo === 'string' ? { uri: sponsorLogo } : sponsorLogo}
-                        style={styles.sponsorLogo}
-                        resizeMode="contain"
-                      />
-                    )}
-                    {sponsorName && !sponsorLogo && (
-                      <Text style={styles.sponsorNameText}>{sponsorName}</Text>
-                    )}
-                  </View>
-                )}
+                {/* Powered by section - shows sponsor or app icon */}
+                <View style={styles.sponsorContainer}>
+                  <Text style={styles.poweredByText}>Powered by</Text>
+                  {sponsorLogo ? (
+                    <Image 
+                      source={typeof sponsorLogo === 'string' ? { uri: sponsorLogo } : sponsorLogo}
+                      style={styles.sponsorLogo}
+                      resizeMode="contain"
+                    />
+                  ) : sponsorName ? (
+                    <Text style={styles.sponsorNameText}>{sponsorName}</Text>
+                  ) : (
+                    <Image 
+                      source={require('../../assets/images/icon.png')}
+                      style={styles.appIconFallback}
+                      resizeMode="contain"
+                    />
+                  )}
+                </View>
 
                 {/* Footer with app download CTA */}
                 <View style={styles.cardFooter}>
@@ -332,16 +343,34 @@ const WinnerCardScreen = ({
             </View>
           </ViewShot>
 
+          {/* Warning for active Battle Royale - position is temporary */}
+          {isCompetitionActive && gameType === 'virtual' && !wonMoney && (
+            <View style={styles.temporaryWarning}>
+              <Ionicons name="warning" size={20} color="#F59E0B" />
+              <Text style={styles.temporaryWarningText}>
+                ⏳ Your position is temporary! Someone can still beat your score. Keep playing to secure your win!
+              </Text>
+            </View>
+          )}
+
           {/* Notice - different for cash winners vs achievement */}
           <View style={[styles.confirmationNotice, isCashWinner && styles.cashNotice]}>
-            <Ionicons name="information-circle" size={20} color={isCashWinner ? '#10B981' : '#FFD700'} />
+            <Ionicons name="information-circle" size={20} color={isCashWinner ? '#00F5A0' : '#FFD700'} />
             <Text style={[styles.confirmationNoticeText, isCashWinner && styles.cashNoticeText]}>
               {isCashWinner 
-                ? 'Share your Winner Card on social media to confirm your win and receive your payout!'
+                ? 'IMPORTANT: Share your Winner Card on social media to confirm your win and receive your payout!'
                 : 'Share your achievement on social media and show off your skills!'
               }
             </Text>
           </View>
+
+          {isCashWinner && (
+            <View style={styles.reminderBox}>
+              <Text style={styles.reminderText}>
+                📸 Post your Winner Card on social media and save the link - you'll need it when requesting your payout!
+              </Text>
+            </View>
+          )}
 
           {/* Save Button */}
           <TouchableOpacity
@@ -385,14 +414,9 @@ const WinnerCardScreen = ({
             <Text style={styles.moreShareText}>More sharing options</Text>
           </TouchableOpacity>
 
-          {isCashWinner && (
-            <View style={styles.reminderBox}>
-              <Text style={styles.reminderText}>
-                📸 Post your Winner Card on social media and save the link - you'll need it when requesting your payout!
-              </Text>
-            </View>
-          )}
-        </View>
+          
+          </View>
+        </ScrollView>
       </LinearGradient>
     </View>
   );
@@ -409,6 +433,12 @@ const styles = StyleSheet.create({
   },
   gradient: {
     flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
@@ -592,6 +622,11 @@ const styles = StyleSheet.create({
     width: 100,
     height: 35, // 3:1 aspect ratio
   },
+  appIconFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+  },
   sponsorNameText: {
     fontSize: 14,
     fontWeight: '700',
@@ -676,6 +711,25 @@ const styles = StyleSheet.create({
     borderRightWidth: 3,
     borderBottomRightRadius: 6,
   },
+  // Temporary position warning for active Battle Royale
+  temporaryWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+  },
+  temporaryWarningText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#F59E0B',
+    lineHeight: 18,
+  },
   // Confirmation notice
   confirmationNotice: {
     flexDirection: 'row',
@@ -700,7 +754,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   cashNoticeText: {
-    color: '#10B981',
+    color: '#00F5A0',
   },
   // Save button
   saveButton: {
@@ -714,7 +768,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   saveButtonCash: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#00D9F5',
   },
   saveButtonText: {
     color: '#FFF',
@@ -779,7 +833,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(16, 185, 129, 0.3)',
   },
   reminderText: {
-    color: '#10B981',
+    color: '#00F5A0',
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',

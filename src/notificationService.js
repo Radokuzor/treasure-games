@@ -67,3 +67,43 @@ export async function registerForPushNotificationsAsync() {
   return token;
 }
 
+/**
+ * Send a push notification to a specific user
+ * @param {Object} notification - Notification object with to, title, body, data
+ */
+export async function sendPushNotification(notification) {
+  const { to, title, body, data } = notification;
+  
+  if (!to) {
+    console.warn('No push token provided for notification');
+    return null;
+  }
+
+  const message = {
+    to,
+    sound: 'default',
+    title,
+    body,
+    data: data || {},
+  };
+
+  try {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+
+    const result = await response.json();
+    console.log('📱 Push notification sent:', result);
+    return result;
+  } catch (error) {
+    console.error('Error sending push notification:', error);
+    return null;
+  }
+}
+

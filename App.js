@@ -5,7 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteField } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
@@ -25,6 +25,7 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import PrivacyScreen from './src/screens/PrivacyScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import TermsScreen from './src/screens/TermsScreen';
+import WinnerCardScreen from './src/screens/WinnerCardScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -58,10 +59,50 @@ const LoadingScreen = () => (
 const TabNavigator = ({ route }) => {
   const { theme } = useTheme();
   const [showFeatureUpdates, setShowFeatureUpdates] = useState(true);
+  const [pendingWinnerCard, setPendingWinnerCard] = useState(null);
+  const [showWinnerCard, setShowWinnerCard] = useState(false);
   const userId = route?.params?.userId;
 
   // Determine if we're using a light theme
   const isLightTheme = theme.colors.text === '#1A1A2E';
+
+  // Check for pending winner card on mount
+  useEffect(() => {
+    const checkPendingWinnerCard = async () => {
+      if (!userId || !hasFirebaseConfig) return;
+
+      try {
+        const db = getDb();
+        if (!db) return;
+
+        const userRef = doc(db, 'users', userId);
+        const userDoc = await getDoc(userRef);
+
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.pendingWinnerCard) {
+            console.log('🎉 Found pending winner card:', userData.pendingWinnerCard);
+            setPendingWinnerCard(userData.pendingWinnerCard);
+            setShowWinnerCard(true);
+
+            // Clear the pending winner card from Firestore
+            await updateDoc(userRef, {
+              pendingWinnerCard: deleteField(),
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error checking pending winner card:', error);
+      }
+    };
+
+    checkPendingWinnerCard();
+  }, [userId]);
+
+  const handleWinnerCardClose = () => {
+    setShowWinnerCard(false);
+    setPendingWinnerCard(null);
+  };
 
   return (
     <>
@@ -147,6 +188,23 @@ const TabNavigator = ({ route }) => {
       <FeatureUpdatesScreen
         userId={userId}
         onComplete={() => setShowFeatureUpdates(false)}
+      />
+    )}
+
+    {/* Pending Winner Card - shows when user won Battle Royale while away */}
+    {showWinnerCard && pendingWinnerCard && (
+      <WinnerCardScreen
+        visible={showWinnerCard}
+        onClose={handleWinnerCardClose}
+        gameName={pendingWinnerCard.gameName}
+        position={pendingWinnerCard.position}
+        score={pendingWinnerCard.score}
+        gameType={pendingWinnerCard.gameType}
+        wonMoney={pendingWinnerCard.wonMoney || false}
+        city={pendingWinnerCard.city}
+        sponsorLogo={pendingWinnerCard.sponsorLogo}
+        sponsorName={pendingWinnerCard.sponsorName}
+        isCompetitionActive={false}
       />
     )}
     </>
