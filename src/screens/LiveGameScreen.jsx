@@ -807,10 +807,19 @@ export default function LiveGameScreen({ route, navigation }) {
 
         subscription = Magnetometer.addListener((data) => {
           // Calculate heading from magnetometer data
+          // The magnetometer gives us x, y, z values
+          // We use atan2 to get the angle, but need to adjust for device orientation
           const { x, y } = data;
-          let heading = Math.atan2(y, x) * (180 / Math.PI);
-          // Normalize to 0-360
-          heading = (heading + 360) % 360;
+          
+          // Calculate angle - atan2(x, y) gives us the heading where:
+          // 0 = North, 90 = East, 180 = South, 270 = West
+          let heading = Math.atan2(x, y) * (180 / Math.PI);
+          
+          // Normalize to 0-360 degrees
+          if (heading < 0) {
+            heading += 360;
+          }
+          
           setDeviceHeading(heading);
         });
       } catch (error) {
@@ -829,15 +838,19 @@ export default function LiveGameScreen({ route, navigation }) {
 
   // Update compass rotation based on bearing to target and device heading
   useEffect(() => {
-    if (!bearing) return;
+    if (bearing === null || bearing === undefined) return;
 
     // Calculate the rotation needed: bearing to target minus current device heading
     // This makes the arrow always point to the target regardless of phone orientation
-    const rotation = bearing - deviceHeading;
+    let rotation = bearing - deviceHeading;
+    
+    // Normalize rotation to -180 to 180 range for shortest path animation
+    while (rotation > 180) rotation -= 360;
+    while (rotation < -180) rotation += 360;
 
     Animated.timing(compassRotation, {
       toValue: rotation,
-      duration: 100,
+      duration: 150,
       useNativeDriver: true,
     }).start();
   }, [bearing, deviceHeading, compassRotation]);
@@ -1456,8 +1469,8 @@ export default function LiveGameScreen({ route, navigation }) {
               transform: [
                 {
                   rotate: compassRotation.interpolate({
-                    inputRange: [0, 360],
-                    outputRange: ['0deg', '360deg'],
+                    inputRange: [-180, 0, 180],
+                    outputRange: ['-180deg', '0deg', '180deg'],
                   }),
                 },
               ],

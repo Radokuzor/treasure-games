@@ -29,6 +29,49 @@ storage/
 
 ## Collections
 
+### 0. `config` Collection
+
+Stores app-wide configuration settings.
+
+#### Document: `appVersion`
+
+Controls app version requirements and force update behavior.
+
+```typescript
+{
+  // Version Requirements
+  minimumVersion: string,        // e.g., "1.0.5" - Users below this MUST update (force update)
+  latestVersion: string,         // e.g., "1.1.0" - Latest available version (optional update prompt)
+  
+  // Custom Messages (optional)
+  forceUpdateMessage: string | null,    // Custom message for forced updates
+  optionalUpdateMessage: string | null, // Custom message for optional updates
+  
+  // Metadata
+  updatedAt: Timestamp,
+  updatedBy: string,             // Admin user ID who made the change
+}
+```
+
+**Example Document:**
+```json
+{
+  "minimumVersion": "1.0.5",
+  "latestVersion": "1.1.0",
+  "forceUpdateMessage": "This version is no longer supported. Please update to continue playing!",
+  "optionalUpdateMessage": "A new version with exciting features is available!",
+  "updatedAt": "2024-01-15T10:30:00Z",
+  "updatedBy": "admin123"
+}
+```
+
+**How It Works:**
+- If user's app version < `minimumVersion`: Shows **unescapable** force update screen
+- If user's app version < `latestVersion` but >= `minimumVersion`: Shows **skippable** update prompt
+- If user's app version >= `latestVersion`: No update prompt shown
+
+---
+
 ### 1. `games` Collection
 
 Stores all game information including location-based and virtual games.

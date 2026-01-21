@@ -3,11 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
+import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { getFirebaseAuth, hasFirebaseConfig } from './src/config/firebase';
+import { getDb, getFirebaseAuth, hasFirebaseConfig } from './src/config/firebase';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import AdminMediaUploadScreen from './src/screens/AdminMediaUploadScreen';
 import AdminScreen from './src/screens/AdminScreen';
@@ -15,6 +17,7 @@ import AuthScreen from './src/screens/AuthScreen';
 import CommunityScreen from './src/screens/CommunityScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
 import FeatureUpdatesScreen from './src/screens/FeatureUpdatesScreen';
+import ForceUpdateScreen from './src/screens/ForceUpdateScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import HowToPlayScreen from './src/screens/HowToPlayScreen';
 import LiveGameScreen from './src/screens/LiveGameScreen';
@@ -26,6 +29,24 @@ import TermsScreen from './src/screens/TermsScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 const ONBOARDING_SEEN_KEY = 'hasSeenOnboarding_v4'; // Changed to v5 to test onboarding
+
+// Get current app version from app.json
+const APP_VERSION = Constants.expoConfig?.version || '1.0.0';
+
+// Helper function to compare semantic versions
+// Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+const compareVersions = (v1, v2) => {
+  const parts1 = v1.split('.').map(Number);
+  const parts2 = v2.split('.').map(Number);
+  
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const p1 = parts1[i] || 0;
+    const p2 = parts2[i] || 0;
+    if (p1 < p2) return -1;
+    if (p1 > p2) return 1;
+  }
+  return 0;
+};
 
 const LoadingScreen = () => (
   <View style={styles.loadingContainer}>
@@ -137,12 +158,75 @@ export default function App() {
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(null);
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState(null);
+  
+  // Version check state
+  const [versionConfig, setVersionConfig] = useState(null);
+  const [updateStatus, setUpdateStatus] = useState(null); // null, 'optional', 'forced'
+  const [skippedUpdate, setSkippedUpdate] = useState(false);
 
   const navigatorKey = useMemo(() => {
     const onboardingKey = hasSeenOnboarding ? 'seen' : 'new';
     const userKey = user ? 'user' : 'guest';
     return `${onboardingKey}-${userKey}`;
   }, [hasSeenOnboarding, user]);
+
+  // Check app version on startup
+  useEffect(() => {
+    const checkAppVersion = async () => {
+      if (!hasFirebaseConfig) {
+        console.log('📱 No Firebase config - skipping version check');
+        return;
+      }
+
+      try {
+        const db = getDb();
+        if (!db) {
+          console.log('📱 No Firestore - skipping version check');
+          return;
+        }
+
+        // Fetch version config from Firestore
+        const configRef = doc(db, 'config', 'appVersion');
+        const configSnap = await getDoc(configRef);
+
+        if (!configSnap.exists()) {
+          console.log('📱 No version config found in Firestore');
+          return;
+        }
+
+        const config = configSnap.data();
+        setVersionConfig(config);
+
+        console.log('📱 App Version Check:');
+        console.log('   Current:', APP_VERSION);
+        console.log('   Minimum:', config.minimumVersion);
+        console.log('   Latest:', config.latestVersion);
+
+        // Check if current version is below minimum (force update)
+        if (config.minimumVersion && compareVersions(APP_VERSION, config.minimumVersion) < 0) {
+          console.log('🚨 Force update required!');
+          setUpdateStatus('forced');
+          return;
+        }
+
+        // Check if there's a newer version available (optional update)
+        if (config.latestVersion && compareVersions(APP_VERSION, config.latestVersion) < 0) {
+          console.log('📢 Optional update available');
+          setUpdateStatus('optional');
+          return;
+        }
+
+        console.log('✅ App is up to date');
+        setUpdateStatus(null);
+      } catch (error) {
+        console.error('❌ Version check error:', error);
+        // Don't block the app if version check fails
+        setUpdateStatus(null);
+      }
+    };
+
+    checkAppVersion();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -256,6 +340,37 @@ export default function App() {
       }
     };
   }, [hasSeenOnboarding]);
+
+  // Show force update screen if required
+  if (updateStatus === 'forced') {
+    return (
+      <ThemeProvider>
+        <ForceUpdateScreen
+          currentVersion={APP_VERSION}
+          minimumVersion={versionConfig?.minimumVersion}
+          latestVersion={versionConfig?.latestVersion}
+          updateMessage={versionConfig?.forceUpdateMessage}
+          isForced={true}
+        />
+      </ThemeProvider>
+    );
+  }
+
+  // Show optional update screen (can be skipped)
+  if (updateStatus === 'optional' && !skippedUpdate) {
+    return (
+      <ThemeProvider>
+        <ForceUpdateScreen
+          currentVersion={APP_VERSION}
+          minimumVersion={versionConfig?.minimumVersion}
+          latestVersion={versionConfig?.latestVersion}
+          updateMessage={versionConfig?.optionalUpdateMessage}
+          isForced={false}
+          onSkip={() => setSkippedUpdate(true)}
+        />
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider>
