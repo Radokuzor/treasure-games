@@ -61,7 +61,7 @@ const HowToPlayScreen = ({ navigation }) => {
         </LinearGradient>
 
         <Section title="Quick Start" icon="🚀">
-          <Bullet>Turn on notifications so you don't miss drops.</Bullet>
+          <Bullet>Turn on notifications so you don&apos;t miss drops.</Bullet>
           <Bullet>Turn on location for nearby games.</Bullet>
           <Bullet>When a game goes live, open it fast and follow the objective.</Bullet>
           <Bullet emoji="⚠️">You can only WIN once per day - play smart!</Bullet>
@@ -74,7 +74,7 @@ const HowToPlayScreen = ({ navigation }) => {
 
         <Section title="Location Games" icon="📍">
           <Bullet>Use photo clues to find the hidden game location.</Bullet>
-          <Bullet>Your GPS must verify you're at the correct spot.</Bullet>
+          <Bullet>Your GPS must verify you&apos;re at the correct spot.</Bullet>
           <Bullet>Complete the mini-game challenge when you arrive.</Bullet>
           <Bullet>First players to arrive and complete the challenge win!</Bullet>
           <Bullet>Multiple winner slots available (usually top 3).</Bullet>
@@ -148,14 +148,14 @@ const HowToPlayScreen = ({ navigation }) => {
         </Section>
 
         <Section title="Safety" icon="🛡️">
-          <Bullet>Don't trespass or enter restricted areas—play from public, safe locations.</Bullet>
+          <Bullet>Don&apos;t trespass or enter restricted areas—play from public, safe locations.</Bullet>
           <Bullet>Never drive distracted. Pull over before interacting with the app.</Bullet>
         </Section>
 
         <Section title="Notifications & Timing" icon="🔔">
           <Bullet>Turn on notifications to catch drops faster.</Bullet>
           <Bullet>Virtual game winners are notified when competition ends.</Bullet>
-          <Bullet>Delivery isn't guaranteed (device settings, network conditions, and OS limits can delay alerts).</Bullet>
+          <Bullet>Delivery isn&apos;t guaranteed (device settings, network conditions, and OS limits can delay alerts).</Bullet>
         </Section>
 
         <Section title="How Games End" icon="🏁">

@@ -1334,7 +1334,7 @@ const AdminScreen = ({ navigation }) => {
           <View style={styles.modalOverlay}>
             <GradientCard style={styles.passwordCard}>
               <Ionicons name="shield-checkmark" size={64} color={theme.colors.accent} />
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+              <Text style={[styles.passwordModalTitle, { color: theme.colors.text }]}>
                 Admin Access Required
               </Text>
               <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
@@ -3732,7 +3732,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 32,
   },
-  modalTitle: {
+  passwordModalTitle: {
     fontSize: 24,
     fontWeight: '800',
     marginTop: 16,

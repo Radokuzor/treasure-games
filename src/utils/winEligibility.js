@@ -236,7 +236,7 @@ export const processBattleRoyaleWinners = async (db, game, sendNotification = nu
       try {
         const userRef = doc(db, 'users', entry.oderId);
         await updateDoc(userRef, {
-          pendingWinnings: increment(winnerPrize),
+          balance: increment(winnerPrize),
           lastBattleRoyaleWin: {
             gameId: game.id,
             gameName: game.name,

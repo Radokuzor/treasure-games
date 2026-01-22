@@ -127,6 +127,9 @@ export default function LiveGameScreen({ route, navigation }) {
   const [showWinnerCard, setShowWinnerCard] = useState(false);
   const [winnerCardData, setWinnerCardData] = useState(null);
 
+  // Instructions modal state (for physical games)
+  const [showInstructions, setShowInstructions] = useState(false);
+
   // Exit game screen
   const handleExit = () => {
     try {
@@ -398,9 +401,11 @@ export default function LiveGameScreen({ route, navigation }) {
     const unsubscribe = onSnapshot(userRef, async (snapshot) => {
       if (snapshot.exists()) {
         const userData = snapshot.data();
-        setCompassEnabled(userData?.compassEnabled !== false);
+        // Compass disabled - navigation arrow not accurate enough
+        // setCompassEnabled(userData?.compassEnabled !== false);
+        setCompassEnabled(false);
       } else {
-        setCompassEnabled(true);
+        setCompassEnabled(false);
       }
     });
 
@@ -1387,6 +1392,8 @@ export default function LiveGameScreen({ route, navigation }) {
       if (distanceMeters > accuracyRadiusMeters) {
         const away = formatDistanceAway(distanceMeters);
         showToast(`You're ${away}. Get closer to win.`);
+        // Show instructions popup to help user understand how to play
+        setShowInstructions(true);
         return;
       }
 
@@ -1531,8 +1538,8 @@ export default function LiveGameScreen({ route, navigation }) {
         <Ionicons name="close" size={32} color="#1A1A2E" />
       </TouchableOpacity>
 
-      {/* Compass - shows for 7s, hides for 5s (only for location games) */}
-      {showCompass && compassEnabled && !isWinner && !isVirtualGame && (
+      {/* Compass - DISABLED - navigation arrow not accurate enough */}
+      {false && showCompass && compassEnabled && !isWinner && !isVirtualGame && (
         <Animated.View
           style={[
             styles.compassContainer,
@@ -1965,7 +1972,7 @@ export default function LiveGameScreen({ route, navigation }) {
                     </LinearGradient>
                   </TouchableOpacity>
                   <Text style={styles.topThreeWinnerCardHint}>
-                    You're #{userRank}! Share your win to claim your prize when the game ends.
+                    You&apos;re #{userRank}! Share your win to claim your prize when the game ends.
                   </Text>
                 </View>
               )}
@@ -2133,7 +2140,7 @@ export default function LiveGameScreen({ route, navigation }) {
       ) : (
         /* Leaderboard View */
         <View style={styles.leaderboardContainer}>
-          <Text style={styles.leaderboardTitle}>🏆 Game Complete!</Text>
+          <Text style={styles.completedLeaderboardTitle}>🏆 Game Complete!</Text>
 
           <ScrollView style={styles.leaderboardScroll} scrollEnabled={Platform.OS !== 'web'}>
             {/* Winners */}
@@ -2146,14 +2153,14 @@ export default function LiveGameScreen({ route, navigation }) {
                   winner.userId === currentUser?.uid && styles.leaderboardRowHighlight,
                 ]}
               >
-                <View style={styles.leaderboardRank}>
+                <View style={styles.completedLeaderboardRank}>
                   {index === 0 && <Text style={styles.rankEmoji}>🥇</Text>}
                   {index === 1 && <Text style={styles.rankEmoji}>🥈</Text>}
                   {index === 2 && <Text style={styles.rankEmoji}>🥉</Text>}
                   {index > 2 && <Text style={styles.rankNumber}>{index + 1}</Text>}
                 </View>
                 <View style={styles.leaderboardInfo}>
-                  <Text style={styles.leaderboardName}>
+                  <Text style={styles.completedLeaderboardName}>
                     {winner.userId === currentUser?.uid ? 'You' : `Player ${winner.userId.slice(0, 6)}`}
                   </Text>
                   <Text style={styles.leaderboardDistance}>
@@ -2179,11 +2186,11 @@ export default function LiveGameScreen({ route, navigation }) {
                         attempt.userId === currentUser?.uid && styles.leaderboardRowHighlight,
                       ]}
                     >
-                      <View style={styles.leaderboardRank}>
+                      <View style={styles.completedLeaderboardRank}>
                         <Text style={styles.rankNumber}>{index + 1}</Text>
                       </View>
                       <View style={styles.leaderboardInfo}>
-                        <Text style={styles.leaderboardName}>
+                        <Text style={styles.completedLeaderboardName}>
                           {attempt.userId === currentUser?.uid ? 'You' : `Player ${attempt.userId.slice(0, 6)}`}
                         </Text>
                         <Text style={styles.leaderboardDistance}>
@@ -2298,6 +2305,89 @@ export default function LiveGameScreen({ route, navigation }) {
           isCompetitionActive={winnerCardData.isCompetitionActive || false}
         />
       )}
+
+      {/* Instructions Modal - shows when entering physical games */}
+      <Modal
+        visible={showInstructions}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowInstructions(false)}
+      >
+        <View style={styles.instructionsOverlay}>
+          <View style={styles.instructionsCard}>
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              style={styles.instructionsHeader}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Ionicons name="map" size={48} color="#FFFFFF" />
+              <Text style={styles.instructionsTitle}>How to Play</Text>
+            </LinearGradient>
+            
+            <View style={styles.instructionsContent}>
+              <View style={styles.instructionStep}>
+                <View style={styles.instructionNumber}>
+                  <Text style={styles.instructionNumberText}>1</Text>
+                </View>
+                <View style={styles.instructionTextContainer}>
+                  <Text style={styles.instructionStepTitle}>📸 Use the Photo Clues</Text>
+                  <Text style={styles.instructionStepText}>
+                    Swipe through the photos to figure out where the game location is hidden.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.instructionStep}>
+                <View style={styles.instructionNumber}>
+                  <Text style={styles.instructionNumberText}>2</Text>
+                </View>
+                <View style={styles.instructionTextContainer}>
+                  <Text style={styles.instructionStepTitle}>📍 Follow the Distance Tracker</Text>
+                  <Text style={styles.instructionStepText}>
+                    Watch the pulsing distance counter - it turns GREEN when you&apos;re getting closer and RED when you&apos;re going the wrong way.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.instructionStep}>
+                <View style={styles.instructionNumber}>
+                  <Text style={styles.instructionNumberText}>3</Text>
+                </View>
+                <View style={styles.instructionTextContainer}>
+                  <Text style={styles.instructionStepTitle}>🎮 Play the Mini-Game</Text>
+                  <Text style={styles.instructionStepText}>
+                    When you arrive at the correct spot, a mini-game will automatically open. Complete it to WIN!
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.instructionTip}>
+                <Ionicons name="bulb" size={20} color="#F59E0B" />
+                <Text style={styles.instructionTipText}>
+                  Tip: First players to arrive and complete the challenge win the prize!
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.instructionsButton}
+              onPress={() => setShowInstructions(false)}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                style={styles.instructionsButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={styles.instructionsButtonText}>Got it! Let&apos;s Go!</Text>
+                <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -3021,7 +3111,7 @@ const styles = StyleSheet.create({
     marginTop: 60,
     padding: 20,
   },
-  leaderboardTitle: {
+  completedLeaderboardTitle: {
     fontSize: 32,
     fontWeight: '800',
     color: '#1A1A2E',
@@ -3051,7 +3141,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#10B981',
   },
-  leaderboardRank: {
+  completedLeaderboardRank: {
     width: 48,
     height: 48,
     alignItems: 'center',
@@ -3069,7 +3159,7 @@ const styles = StyleSheet.create({
   leaderboardInfo: {
     flex: 1,
   },
-  leaderboardName: {
+  completedLeaderboardName: {
     fontSize: 18,
     fontWeight: '700',
     color: '#1A1A2E',
@@ -3166,5 +3256,104 @@ const styles = StyleSheet.create({
   compassArrow: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Instructions Modal Styles
+  instructionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  instructionsCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  instructionsHeader: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+  },
+  instructionsTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginTop: 12,
+  },
+  instructionsContent: {
+    padding: 20,
+  },
+  instructionStep: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  instructionNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  instructionNumberText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  instructionTextContainer: {
+    flex: 1,
+  },
+  instructionStepTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A1A2E',
+    marginBottom: 4,
+  },
+  instructionStepText: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  instructionTip: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 8,
+    gap: 8,
+  },
+  instructionTipText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#92400E',
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  instructionsButton: {
+    margin: 20,
+    marginTop: 0,
+  },
+  instructionsButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+    gap: 8,
+  },
+  instructionsButtonText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

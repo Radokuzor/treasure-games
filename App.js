@@ -5,12 +5,14 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
-import { doc, getDoc, updateDoc, deleteField } from 'firebase/firestore';
+import { deleteField, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
+import { serverTimestamp } from 'firebase/firestore';
 import { getDb, getFirebaseAuth, hasFirebaseConfig } from './src/config/firebase';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { registerForPushNotificationsAsync } from './src/notificationService';
 import AdminMediaUploadScreen from './src/screens/AdminMediaUploadScreen';
 import AdminScreen from './src/screens/AdminScreen';
 import AuthScreen from './src/screens/AuthScreen';
@@ -26,6 +28,7 @@ import PrivacyScreen from './src/screens/PrivacyScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import TermsScreen from './src/screens/TermsScreen';
 import WinnerCardScreen from './src/screens/WinnerCardScreen';
+import { getDeviceId } from './src/utils/deviceId';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -66,7 +69,7 @@ const TabNavigator = ({ route }) => {
   // Determine if we're using a light theme
   const isLightTheme = theme.colors.text === '#1A1A2E';
 
-  // Check for pending winner card on mount
+  // Check for pending winner card and ensure push token is registered on mount
   useEffect(() => {
     const checkPendingWinnerCard = async () => {
       if (!userId || !hasFirebaseConfig) return;
@@ -89,6 +92,42 @@ const TabNavigator = ({ route }) => {
             await updateDoc(userRef, {
               pendingWinnerCard: deleteField(),
             });
+          }
+          
+          // Check if user has a device ID, if not try to get one
+          if (!userData.deviceId) {
+            console.log('📱 No device ID found, attempting to get...');
+            try {
+              const deviceId = await getDeviceId();
+              if (deviceId) {
+                await updateDoc(userRef, {
+                  deviceId,
+                  updatedAt: serverTimestamp(),
+                });
+                console.log('✅ Device ID saved successfully:', deviceId);
+              }
+            } catch (deviceError) {
+              console.log('⚠️ Device ID retrieval failed:', deviceError?.message ?? deviceError);
+            }
+          }
+          
+          // Check if user has a push token, if not try to register one
+          if (!userData.pushToken) {
+            console.log('📱 No push token found, attempting to register...');
+            try {
+              const pushToken = await registerForPushNotificationsAsync();
+              if (pushToken) {
+                await updateDoc(userRef, {
+                  pushToken,
+                  pushTokenUpdatedAt: serverTimestamp(),
+                });
+                console.log('✅ Push token registered successfully:', pushToken);
+              } else {
+                console.log('⚠️ Could not get push token (user may have denied permissions or not on native device)');
+              }
+            } catch (pushError) {
+              console.log('⚠️ Push token registration failed:', pushError?.message ?? pushError);
+            }
           }
         }
       } catch (error) {

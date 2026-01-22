@@ -28,8 +28,9 @@ if (Platform.OS !== 'web') {
 }
 import { getDb, getFirebaseAuth, getFirebaseStorage, hasFirebaseConfig } from '../config/firebase';
 import { registerForPushNotificationsAsync } from '../notificationService';
+import { getDeviceId } from '../utils/deviceId';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -243,6 +244,20 @@ const AuthScreen = ({ navigation }) => {
               }
             }
 
+            // Get device ID and push token before creating user doc
+            let deviceId = null;
+            let pushToken = null;
+            try {
+              deviceId = await getDeviceId();
+            } catch (e) {
+              console.log('Could not get device ID:', e?.message ?? e);
+            }
+            try {
+              pushToken = await registerForPushNotificationsAsync();
+            } catch (e) {
+              console.log('Could not get push token:', e?.message ?? e);
+            }
+
             await setDoc(doc(firebaseDb, 'users', credential.user.uid), {
               email: email.trim(),
               firstName: firstName.trim(),
@@ -253,6 +268,9 @@ const AuthScreen = ({ navigation }) => {
               age: Number(age) || null,
               profileImageUrl,
               smsOptIn: agreedToSMS,
+              deviceId: deviceId || null,
+              pushToken: pushToken || null,
+              pushTokenUpdatedAt: pushToken ? serverTimestamp() : null,
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             });
@@ -270,28 +288,39 @@ const AuthScreen = ({ navigation }) => {
         routes: [{ name: 'MainTabs', params: { userId: credential?.user?.uid } }],
       });
 
-      // Register push notifications
+      // Register push notifications and device ID (for sign-in, update existing user)
       const uid = credential?.user?.uid ?? firebaseAuth.currentUser?.uid ?? null;
-      if (uid) {
+      if (uid && !isSignUp) {
+        // Only do this for sign-in (sign-up already captures these above)
         void (async () => {
           try {
-            const pushToken = await registerForPushNotificationsAsync();
-            if (!pushToken) return;
-
             const db = getDb();
             if (!db) return;
 
-            await setDoc(
-              doc(db, 'users', uid),
-              {
-                pushToken,
-                pushTokenUpdatedAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              },
-              { merge: true }
-            );
+            const updates = { updatedAt: serverTimestamp() };
+
+            // Get device ID
+            try {
+              const deviceId = await getDeviceId();
+              if (deviceId) updates.deviceId = deviceId;
+            } catch (e) {
+              console.log('Could not get device ID:', e?.message ?? e);
+            }
+
+            // Get push token
+            try {
+              const pushToken = await registerForPushNotificationsAsync();
+              if (pushToken) {
+                updates.pushToken = pushToken;
+                updates.pushTokenUpdatedAt = serverTimestamp();
+              }
+            } catch (e) {
+              console.log('Could not get push token:', e?.message ?? e);
+            }
+
+            await updateDoc(doc(db, 'users', uid), updates);
           } catch (error) {
-            console.log('Push token save failed:', error?.message ?? error);
+            console.log('User update failed:', error?.message ?? error);
           }
         })();
       }
@@ -382,7 +411,7 @@ const AuthScreen = ({ navigation }) => {
       {/* Switch to Sign Up */}
       <TouchableOpacity onPress={() => setIsSignUp(true)} style={styles.switchButton}>
         <Text style={styles.switchText}>
-          Don't have an account? <Text style={styles.switchTextBold}>Sign Up</Text>
+          Don&apos;t have an account? <Text style={styles.switchTextBold}>Sign Up</Text>
         </Text>
       </TouchableOpacity>
     </View>

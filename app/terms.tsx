@@ -52,7 +52,7 @@ export default function TermsPage() {
 
           <Text style={styles.subsectionTitle}>Reporting:</Text>
           <Text style={styles.paragraph}>
-            Users can report offensive content via the 'Report' button. We commit to acting on reports and removing violating content within 24 hours.
+            Users can report offensive content via the &quot;Report&quot; button. We commit to acting on reports and removing violating content within 24 hours.
           </Text>
 
           <Text style={styles.sectionTitle}>3. No Purchase Necessary</Text>

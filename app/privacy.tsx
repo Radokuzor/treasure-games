@@ -72,7 +72,7 @@ export default function PrivacyPage() {
             You have the right to access or delete your data at any time.
           </Text>
           <Text style={styles.paragraph}>
-            To delete your account and all associated data, go to the Profile section in the app and select 'Delete Account' or email us at admin@fourthwatchtech.com.
+            To delete your account and all associated data, go to the Profile section in the app and select &quot;Delete Account&quot; or email us at admin@fourthwatchtech.com.
           </Text>
           <Text style={styles.paragraph}>
             We will process deletion requests within 30 days.
@@ -80,7 +80,7 @@ export default function PrivacyPage() {
 
           <Text style={styles.sectionTitle}>4. Third-Party Services</Text>
           <Text style={styles.paragraph}>
-            We use Google Firebase for database and authentication services. Please refer to Google's Privacy Policy for more information on how they handle data.
+            We use Google Firebase for database and authentication services. Please refer to Google&apos;s Privacy Policy for more information on how they handle data.
           </Text>
 
           <Text style={styles.sectionTitle}>5. Security</Text>

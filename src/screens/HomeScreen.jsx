@@ -423,7 +423,7 @@ const HomeScreen = () => {
           <Ionicons name="film-outline" size={64} color="rgba(255,255,255,0.3)" />
           <Text style={styles.emptyStateTitle}>No Content Yet</Text>
           <Text style={styles.emptyStateText}>
-            The admin hasn't uploaded any videos or photos yet.{'\n'}Check back soon!
+            The admin has not uploaded any videos or photos yet.{'\n'}Check back soon!
           </Text>
         </View>
       </View>

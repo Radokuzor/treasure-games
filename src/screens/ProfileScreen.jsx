@@ -1,26 +1,30 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  ActivityIndicator,
-  Image,
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Switch,
-  Modal,
-  Platform,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../context/ThemeContext';
-import { GradientBackground, GradientCard } from '../components/GradientComponents';
-import { getFirebaseAuth, getFirebaseDb, hasFirebaseConfig } from '../config/firebase';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { deleteUser, onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GradientBackground, GradientCard } from '../components/GradientComponents';
+import { getFirebaseAuth, getFirebaseDb, hasFirebaseConfig } from '../config/firebase';
+import { useTheme } from '../context/ThemeContext';
 
 const FRIENDS_DATA = [
   { id: '1', name: 'Sarah', avatar: '👩‍🦰', status: 'online' },
@@ -47,12 +51,12 @@ const ProfileScreen = ({ navigation }) => {
   });
 
   const [stats, setStats] = useState({
-    balance: 75.0,
-    earnings: 750.0,
-    wins: 10,
-    friends: 47,
+    balance: 0,
+    earnings: 0,
+    wins: 0,
+    friends: 0,
   });
-  const canRedeem = stats.balance >= 25 && !isRedeeming && socialMediaLink.trim().length > 0;
+  const canRedeem = stats.balance >= 5 && !isRedeeming && socialMediaLink.trim().length > 0;
 
   useEffect(() => {
     if (!hasFirebaseConfig) return;
@@ -71,6 +75,7 @@ const ProfileScreen = ({ navigation }) => {
     if (!hasFirebaseConfig) return;
     if (!uid) {
       setProfile({ firstName: '', lastName: '', username: '', profileImageUrl: '' });
+      setStats({ balance: 0, earnings: 0, wins: 0, friends: 0 });
       return;
     }
 
@@ -80,8 +85,14 @@ const ProfileScreen = ({ navigation }) => {
     const unsubscribe = onSnapshot(
       doc(db, 'users', uid),
       (snap) => {
-        if (!snap.exists()) return;
+        if (!snap.exists()) {
+          console.log('📊 Profile: User document does not exist for uid:', uid);
+          // Reset stats to 0 if user document doesn't exist
+          setStats({ balance: 0, earnings: 0, wins: 0, friends: 0 });
+          return;
+        }
         const data = snap.data() ?? {};
+        console.log('📊 Profile: Raw Firebase data:', JSON.stringify(data, null, 2));
 
         const firstName = typeof data.firstName === 'string' ? data.firstName : '';
         const lastName = typeof data.lastName === 'string' ? data.lastName : '';
@@ -95,12 +106,16 @@ const ProfileScreen = ({ navigation }) => {
           profileImageUrl,
         });
 
-        setStats((prev) => ({
-          ...prev,
-          balance: typeof data.balance === 'number' ? data.balance : prev.balance,
-          earnings: typeof data.earnings === 'number' ? data.earnings : prev.earnings,
-          wins: typeof data.wins === 'number' ? data.wins : prev.wins,
-        }));
+        // Map Firebase field names to display stats
+        const newStats = {
+          balance: typeof data.balance === 'number' ? data.balance : 0,
+          earnings: typeof data.totalEarnings === 'number' ? data.totalEarnings : 0,
+          wins: typeof data.totalWins === 'number' ? data.totalWins : 0,
+          friends: typeof data.friends === 'number' ? data.friends : 0,
+        };
+        
+        console.log('📊 Profile: Setting stats to:', newStats);
+        setStats(newStats);
       },
       (error) => {
         console.log('Profile stats listener error:', error?.message ?? error);
@@ -141,8 +156,8 @@ const ProfileScreen = ({ navigation }) => {
         const data = snap.data() ?? {};
         const currentBalance = typeof data.balance === 'number' ? data.balance : 0;
 
-        if (currentBalance < 25) {
-          throw new Error('Minimum redemption amount is $25.');
+        if (currentBalance < 5) {
+          throw new Error('Minimum redemption amount is $5.');
         }
 
         transaction.set(
@@ -317,6 +332,10 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
                 Balance
               </Text>
+              <View style={styles.tapToRedeemBadge}>
+                <Ionicons name="hand-left" size={12} color="#FFFFFF" />
+                <Text style={styles.tapToRedeemText}>Tap to Redeem</Text>
+              </View>
             </GradientCard>
           </TouchableOpacity>
 
@@ -554,107 +573,259 @@ const ProfileScreen = ({ navigation }) => {
 
       {/* Redeem Modal */}
       <Modal visible={showRedeemModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <GradientCard style={styles.redeemCard}>
-            <Ionicons name="gift-outline" size={64} color={theme.colors.success} />
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Redeem</Text>
-            <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
-              An email link will be sent to you
-            </Text>
-            <Text style={[styles.redeemNote, { color: theme.colors.textSecondary }]}>
-              Minimum redemption: $25
-            </Text>
-
-            {/* Social Post Requirement Notice */}
-            <View style={styles.socialPostNotice}>
-              <Ionicons name="warning" size={20} color="#F59E0B" />
-              <Text style={styles.socialPostNoticeText}>
-                To receive your payout, you must have posted your Winner Card on social media (Instagram, TikTok, or Facebook). Paste the link below!
-              </Text>
-            </View>
-
-            {/* Social Media Link Input */}
-            <View style={styles.socialLinkContainer}>
-              <Text style={[styles.socialLinkLabel, { color: theme.colors.text }]}>
-                📸 Your Winner Card Post Link (Required)
-              </Text>
-              <Text style={[styles.socialLinkHint, { color: theme.colors.textSecondary }]}>
-                Paste the link to your social media post showing your winner card
-              </Text>
-              <View style={[
-                styles.socialLinkInputContainer, 
-                { borderColor: socialMediaLink.trim().length > 0 ? '#10B981' : '#EF4444' }
-              ]}>
-                <Ionicons 
-                  name={socialMediaLink.trim().length > 0 ? "checkmark-circle" : "link-outline"} 
-                  size={20} 
-                  color={socialMediaLink.trim().length > 0 ? '#10B981' : '#EF4444'} 
-                />
-                <TextInput
-                  style={[styles.socialLinkInput, { color: theme.colors.text }]}
-                  placeholder="https://instagram.com/p/..."
-                  placeholderTextColor={theme.colors.textSecondary}
-                  value={socialMediaLink}
-                  onChangeText={setSocialMediaLink}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                />
-              </View>
-              {!socialMediaLink.trim() && (
-                <Text style={styles.socialLinkRequired}>
-                  ⚠️ You must provide your social media post link to redeem
+        {Platform.OS === 'web' ? (
+          <View style={styles.webBlurContainer}>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <KeyboardAvoidingView 
+                behavior="height"
+                style={styles.modalOverlay}
+              >
+                <ScrollView 
+                  contentContainerStyle={styles.modalScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  <GradientCard style={styles.redeemCard}>
+                <Ionicons name="gift-outline" size={64} color={theme.colors.success} />
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Redeem</Text>
+                <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
+                  An email link will be sent to you
                 </Text>
-              )}
-            </View>
+                <Text style={[styles.redeemNote, { color: theme.colors.textSecondary }]}>
+                  Minimum redemption: $5
+                </Text>
 
-            <TouchableOpacity
-              onPress={() => void handleRedeem('amazon')}
-              activeOpacity={0.85}
-              style={styles.fullWidth}
-              disabled={!canRedeem}
-            >
-              <LinearGradient
-                colors={theme.gradients.primary}
-                style={[styles.submitButton, !canRedeem ? { opacity: 0.5 } : null]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+                {/* Social Post Requirement Notice */}
+                <View style={styles.socialPostNotice}>
+                  <Ionicons name="warning" size={20} color="#F59E0B" />
+                  <Text style={styles.socialPostNoticeText}>
+                    To receive your payout, you must have posted your Winner Card on social media (Instagram, TikTok, or Facebook). Paste the link below!
+                  </Text>
+                </View>
+
+                {/* Social Media Link Input */}
+                <View style={styles.socialLinkContainer}>
+                  <Text style={[styles.socialLinkLabel, { color: theme.colors.text }]}>
+                    📸 Your Winner Card Post Link (Required)
+                  </Text>
+                  <Text style={[styles.socialLinkHint, { color: theme.colors.textSecondary }]}>
+                    Paste the link to your social media post showing your winner card
+                  </Text>
+                  <View style={[
+                    styles.socialLinkInputContainer, 
+                    { borderColor: socialMediaLink.trim().length > 0 ? '#10B981' : '#EF4444' }
+                  ]}>
+                    <Ionicons 
+                      name={socialMediaLink.trim().length > 0 ? "checkmark-circle" : "link-outline"} 
+                      size={20} 
+                      color={socialMediaLink.trim().length > 0 ? '#10B981' : '#EF4444'} 
+                    />
+                    <TextInput
+                      style={[styles.socialLinkInput, { color: theme.colors.text }]}
+                      placeholder="https://instagram.com/p/..."
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={socialMediaLink}
+                      onChangeText={setSocialMediaLink}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="url"
+                    />
+                  </View>
+                  {!socialMediaLink.trim() && (
+                    <Text style={styles.socialLinkRequired}>
+                      ⚠️ You must provide your social media post link to redeem
+                    </Text>
+                  )}
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => void handleRedeem('amazon')}
+                  activeOpacity={0.85}
+                  style={styles.fullWidth}
+                  disabled={!canRedeem}
+                >
+                  <LinearGradient
+                    colors={theme.gradients.primary}
+                    style={[styles.submitButton, !canRedeem ? { opacity: 0.5 } : null]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    {isRedeeming ? <ActivityIndicator color="#FFFFFF" /> : null}
+                    <Text style={styles.submitButtonText}>{isRedeeming ? 'Processing...' : 'Amazon'}</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => void handleRedeem('visa')}
+                  activeOpacity={0.85}
+                  style={styles.fullWidth}
+                  disabled={!canRedeem}
+                >
+                  <LinearGradient
+                    colors={theme.gradients.accent}
+                    style={[styles.submitButton, !canRedeem ? { opacity: 0.5 } : null]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    {isRedeeming ? <ActivityIndicator color="#FFFFFF" /> : null}
+                    <Text style={styles.submitButtonText}>{isRedeeming ? 'Processing...' : 'Visa'}</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setShowRedeemModal(false);
+                    setSocialMediaLink('');
+                  }}
+                  activeOpacity={0.8}
+                  style={styles.cancelButton}
+                  disabled={isRedeeming}
+                >
+                  <Text style={[styles.cancelButtonText, { color: theme.colors.textSecondary }]}>Cancel</Text>
+                </TouchableOpacity>
+
+                {/* Contact Support */}
+                <View style={styles.supportEmailContainer}>
+                  <Ionicons name="mail-outline" size={14} color={theme.colors.textSecondary} />
+                  <Text style={[styles.supportEmailText, { color: theme.colors.textSecondary }]}>
+                    Questions? Email admin@fourthwatchtech.com
+                  </Text>
+                </View>
+                  </GradientCard>
+                </ScrollView>
+              </KeyboardAvoidingView>
+            </TouchableWithoutFeedback>
+          </View>
+        ) : (
+          <BlurView 
+            intensity={Platform.OS === 'ios' ? 80 : 100} 
+            tint="dark" 
+            style={styles.blurContainer}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.modalOverlay}
               >
-                {isRedeeming ? <ActivityIndicator color="#FFFFFF" /> : null}
-                <Text style={styles.submitButtonText}>{isRedeeming ? 'Processing...' : 'Amazon'}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <ScrollView 
+                  contentContainerStyle={styles.modalScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  <GradientCard style={styles.redeemCard}>
+                    <Ionicons name="gift-outline" size={64} color={theme.colors.success} />
+                    <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Redeem</Text>
+                    <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
+                      An email link will be sent to you
+                    </Text>
+                    <Text style={[styles.redeemNote, { color: theme.colors.textSecondary }]}>
+                      Minimum redemption: $5
+                    </Text>
 
-            <TouchableOpacity
-              onPress={() => void handleRedeem('visa')}
-              activeOpacity={0.85}
-              style={styles.fullWidth}
-              disabled={!canRedeem}
-            >
-              <LinearGradient
-                colors={theme.gradients.accent}
-                style={[styles.submitButton, !canRedeem ? { opacity: 0.5 } : null]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                {isRedeeming ? <ActivityIndicator color="#FFFFFF" /> : null}
-                <Text style={styles.submitButtonText}>{isRedeeming ? 'Processing...' : 'Visa'}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                    {/* Social Post Requirement Notice */}
+                    <View style={styles.socialPostNotice}>
+                      <Ionicons name="warning" size={20} color="#F59E0B" />
+                      <Text style={styles.socialPostNoticeText}>
+                        To receive your payout, you must have posted your Winner Card on social media (Instagram, TikTok, or Facebook). Paste the link below!
+                      </Text>
+                    </View>
 
-            <TouchableOpacity
-              onPress={() => {
-                setShowRedeemModal(false);
-                setSocialMediaLink('');
-              }}
-              activeOpacity={0.8}
-              style={styles.cancelButton}
-              disabled={isRedeeming}
-            >
-              <Text style={[styles.cancelButtonText, { color: theme.colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-          </GradientCard>
-        </View>
+                    {/* Social Media Link Input */}
+                    <View style={styles.socialLinkContainer}>
+                      <Text style={[styles.socialLinkLabel, { color: theme.colors.text }]}>
+                        📸 Your Winner Card Post Link (Required)
+                      </Text>
+                      <Text style={[styles.socialLinkHint, { color: theme.colors.textSecondary }]}>
+                        Paste the link to your social media post showing your winner card
+                      </Text>
+                      <View style={[
+                        styles.socialLinkInputContainer, 
+                        { borderColor: socialMediaLink.trim().length > 0 ? '#10B981' : '#EF4444' }
+                      ]}>
+                        <Ionicons 
+                          name={socialMediaLink.trim().length > 0 ? "checkmark-circle" : "link-outline"} 
+                          size={20} 
+                          color={socialMediaLink.trim().length > 0 ? '#10B981' : '#EF4444'} 
+                        />
+                        <TextInput
+                          style={[styles.socialLinkInput, { color: theme.colors.text }]}
+                          placeholder="https://instagram.com/p/..."
+                          placeholderTextColor={theme.colors.textSecondary}
+                          value={socialMediaLink}
+                          onChangeText={setSocialMediaLink}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          keyboardType="url"
+                        />
+                      </View>
+                      {!socialMediaLink.trim() && (
+                        <Text style={styles.socialLinkRequired}>
+                          ⚠️ You must provide your social media post link to redeem
+                        </Text>
+                      )}
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => void handleRedeem('amazon')}
+                      activeOpacity={0.85}
+                      style={styles.fullWidth}
+                      disabled={!canRedeem}
+                    >
+                      <LinearGradient
+                        colors={theme.gradients.primary}
+                        style={[styles.submitButton, !canRedeem ? { opacity: 0.5 } : null]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                      >
+                        {isRedeeming ? <ActivityIndicator color="#FFFFFF" /> : null}
+                        <Text style={styles.submitButtonText}>{isRedeeming ? 'Processing...' : 'Amazon'}</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => void handleRedeem('visa')}
+                      activeOpacity={0.85}
+                      style={styles.fullWidth}
+                      disabled={!canRedeem}
+                    >
+                      <LinearGradient
+                        colors={theme.gradients.accent}
+                        style={[styles.submitButton, !canRedeem ? { opacity: 0.5 } : null]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                      >
+                        {isRedeeming ? <ActivityIndicator color="#FFFFFF" /> : null}
+                        <Text style={styles.submitButtonText}>{isRedeeming ? 'Processing...' : 'Visa'}</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setShowRedeemModal(false);
+                        setSocialMediaLink('');
+                      }}
+                      activeOpacity={0.8}
+                      style={styles.cancelButton}
+                      disabled={isRedeeming}
+                    >
+                      <Text style={[styles.cancelButtonText, { color: theme.colors.textSecondary }]}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    {/* Contact Support */}
+                    <View style={styles.supportEmailContainer}>
+                      <Ionicons name="mail-outline" size={14} color={theme.colors.textSecondary} />
+                      <Text style={[styles.supportEmailText, { color: theme.colors.textSecondary }]}>
+                        Questions? Email admin@fourthwatchtech.com
+                      </Text>
+                    </View>
+                  </GradientCard>
+                </ScrollView>
+              </KeyboardAvoidingView>
+            </TouchableWithoutFeedback>
+          </BlurView>
+        )}
       </Modal>
     </GradientBackground>
   );
@@ -726,8 +897,12 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     alignItems: 'center',
-    padding: 20,
+    justifyContent: 'flex-start',
+    paddingTop: 20,
+    paddingBottom: 16,
+    paddingHorizontal: 12,
     marginHorizontal: 6,
+    minHeight: 160,
   },
   statValue: {
     fontSize: 24,
@@ -738,6 +913,21 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  tapToRedeemBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10B981',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+    gap: 4,
+  },
+  tapToRedeemText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   section: {
     margin: 16,
@@ -850,12 +1040,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginLeft: 12,
   },
+  blurContainer: {
+    flex: 1,
+  },
+  webBlurContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'center',
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
   },
   redeemCard: {
     width: '100%',
@@ -951,6 +1152,16 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  supportEmailContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 6,
+  },
+  supportEmailText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
 
