@@ -20,9 +20,12 @@ import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { GradientBackground } from '../components/GradientComponents';
 import { getDb, hasFirebaseConfig } from '../config/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { getFirebaseAuth } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerForPushNotificationsAsync } from '../notificationService';
+import { getDeviceId } from '../utils/deviceId';
+import * as Notifications from 'expo-notifications';
 
 // Conditionally import expo-av components only for native
 let Audio, Video;
@@ -77,6 +80,87 @@ const HomeScreen = () => {
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  // Check and update missing push token / device ID
+  useEffect(() => {
+    if (!hasFirebaseConfig) return;
+    
+    const checkAndUpdateUserTokens = async () => {
+      try {
+        const auth = getFirebaseAuth();
+        const user = auth?.currentUser;
+        if (!user) return;
+
+        const db = getDb();
+        if (!db) return;
+
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (!userSnap.exists()) return;
+        
+        const userData = userSnap.data();
+        const updates = {};
+
+        // Check if device ID is missing
+        if (!userData.deviceId) {
+          try {
+            const deviceId = await getDeviceId();
+            if (deviceId) {
+              updates.deviceId = deviceId;
+              console.log('📱 HomeScreen: Adding missing device ID:', deviceId);
+            }
+          } catch (e) {
+            console.log('Could not get device ID:', e?.message ?? e);
+          }
+        }
+
+        // Check if push token is missing
+        if (!userData.pushToken) {
+          try {
+            // First check if we have notification permissions
+            const { status } = await Notifications.getPermissionsAsync();
+            
+            if (status === 'granted') {
+              // We have permission, get the token
+              const pushToken = await registerForPushNotificationsAsync();
+              if (pushToken) {
+                updates.pushToken = pushToken;
+                updates.pushTokenUpdatedAt = serverTimestamp();
+                console.log('📱 HomeScreen: Adding missing push token:', pushToken);
+              }
+            } else if (status !== 'denied') {
+              // Permission not yet asked, request it
+              const { status: newStatus } = await Notifications.requestPermissionsAsync();
+              if (newStatus === 'granted') {
+                const pushToken = await registerForPushNotificationsAsync();
+                if (pushToken) {
+                  updates.pushToken = pushToken;
+                  updates.pushTokenUpdatedAt = serverTimestamp();
+                  console.log('📱 HomeScreen: Got push token after permission request:', pushToken);
+                }
+              }
+            }
+          } catch (e) {
+            console.log('Could not get push token:', e?.message ?? e);
+          }
+        }
+
+        // Update user document if we have any updates
+        if (Object.keys(updates).length > 0) {
+          updates.updatedAt = serverTimestamp();
+          await updateDoc(userRef, updates);
+          console.log('✅ HomeScreen: Updated user with missing tokens:', Object.keys(updates));
+        }
+      } catch (error) {
+        console.log('HomeScreen token check error:', error?.message ?? error);
+      }
+    };
+
+    // Run the check after a short delay to not block initial render
+    const timer = setTimeout(checkAndUpdateUserTokens, 2000);
+    return () => clearTimeout(timer);
   }, []);
 
   // Load media from Firestore

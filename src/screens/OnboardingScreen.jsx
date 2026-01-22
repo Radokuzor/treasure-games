@@ -7,6 +7,8 @@ import * as Notifications from 'expo-notifications';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { registerForPushNotificationsAsync } from '../notificationService';
+import { getDeviceId } from '../utils/deviceId';
 import LottieView from 'lottie-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -310,6 +312,22 @@ const OnboardingScreen = ({ navigation }) => {
         }
       }
 
+      // Get device ID and push token before creating user doc
+      let deviceId = null;
+      let pushToken = null;
+      try {
+        deviceId = await getDeviceId();
+        console.log('📱 Device ID:', deviceId);
+      } catch (e) {
+        console.log('Could not get device ID:', e?.message ?? e);
+      }
+      try {
+        pushToken = await registerForPushNotificationsAsync();
+        console.log('📱 Push token:', pushToken);
+      } catch (e) {
+        console.log('Could not get push token:', e?.message ?? e);
+      }
+
       // Create user document in Firestore
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         email: email.trim(),
@@ -320,6 +338,9 @@ const OnboardingScreen = ({ navigation }) => {
         age: Number(age) || null,
         profileImageUrl,
         smsOptIn: agreedToSMS,
+        deviceId: deviceId || null,
+        pushToken: pushToken || null,
+        pushTokenUpdatedAt: pushToken ? serverTimestamp() : null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -516,7 +537,7 @@ const OnboardingScreen = ({ navigation }) => {
 
           <Text style={styles.stepTitle}>Claim The Win</Text>
           <Text style={styles.stepDescription}>
-            Win big and finnally get those shoes on you shein temu or amazon cartcart 👀... its ok we dont judge
+            Win big and finally get those shoes on your Shein, Temu, or Amazon cart 👀... its ok we don't judge
           </Text>
 
           <TouchableOpacity onPress={nextSlide} style={styles.nextButton}>
