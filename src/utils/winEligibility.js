@@ -11,12 +11,15 @@ const getTodayString = () => {
 
 /**
  * Check if a user/device is eligible to win today
+ * Supports separate limits for physical and battle royale games
+ * Users can win max 1 physical game + 1 battle royale game per day (2 total)
  * 
  * @param {Firestore} db - Firestore database instance
  * @param {string} userId - The user's Firebase Auth UID
+ * @param {string} gameType - 'physical' or 'battle_royale' (defaults to 'physical' for backwards compatibility)
  * @returns {Promise<{eligible: boolean, reason?: string, deviceId: string, message?: string}>}
  */
-export const checkWinEligibility = async (db, userId) => {
+export const checkWinEligibility = async (db, userId, gameType = 'physical') => {
   try {
     const deviceId = await getDeviceId();
     const today = getTodayString();
@@ -32,31 +35,58 @@ export const checkWinEligibility = async (db, userId) => {
 
     const userData = userDoc.data();
 
-    // Check if this user already won today
-    if (userData.lastWinDate === today) {
-      return {
-        eligible: false,
-        reason: 'user_won_today',
-        deviceId,
-        message: "🏆 You've already won today! Play for fun, but prizes go to other players.",
-      };
-    }
-
-    // Check the daily wins collection for this device
-    // This catches the case where someone uses the same device with different accounts
-    const deviceWinRef = doc(db, 'dailyWins', `${today}_${deviceId}`);
-    const deviceWinDoc = await getDoc(deviceWinRef);
-
-    if (deviceWinDoc.exists()) {
-      const deviceWinData = deviceWinDoc.data();
-      // If a different user won on this device today
-      if (deviceWinData.userId !== userId) {
+    // Check based on game type
+    if (gameType === 'battle_royale') {
+      // Check if user already won a battle royale today
+      if (userData.lastBattleRoyaleWinDate === today) {
         return {
           eligible: false,
-          reason: 'device_won_today',
+          reason: 'user_won_battle_royale_today',
           deviceId,
-          message: "📱 This device already has a winner today. Try again tomorrow!",
+          message: "🏆 You've already won a Battle Royale today! Play for fun, but prizes go to other players.",
         };
+      }
+
+      // Check device-level battle royale wins
+      const deviceWinRef = doc(db, 'dailyWins', `${today}_${deviceId}_battle_royale`);
+      const deviceWinDoc = await getDoc(deviceWinRef);
+
+      if (deviceWinDoc.exists()) {
+        const deviceWinData = deviceWinDoc.data();
+        if (deviceWinData.userId !== userId) {
+          return {
+            eligible: false,
+            reason: 'device_won_battle_royale_today',
+            deviceId,
+            message: "📱 This device already has a Battle Royale winner today. Try again tomorrow!",
+          };
+        }
+      }
+    } else {
+      // Physical game - check if user already won a physical game today
+      if (userData.lastPhysicalWinDate === today) {
+        return {
+          eligible: false,
+          reason: 'user_won_physical_today',
+          deviceId,
+          message: "🏆 You've already won a physical game today! Play for fun, but prizes go to other players.",
+        };
+      }
+
+      // Check device-level physical wins
+      const deviceWinRef = doc(db, 'dailyWins', `${today}_${deviceId}_physical`);
+      const deviceWinDoc = await getDoc(deviceWinRef);
+
+      if (deviceWinDoc.exists()) {
+        const deviceWinData = deviceWinDoc.data();
+        if (deviceWinData.userId !== userId) {
+          return {
+            eligible: false,
+            reason: 'device_won_physical_today',
+            deviceId,
+            message: "📱 This device already has a physical game winner today. Try again tomorrow!",
+          };
+        }
       }
     }
 
@@ -72,42 +102,44 @@ export const checkWinEligibility = async (db, userId) => {
 /**
  * Record a daily win for a user and device
  * Call this AFTER successfully recording the user as a winner
+ * Tracks wins separately by game type (physical vs battle_royale)
  * 
  * @param {Firestore} db - Firestore database instance
  * @param {string} userId - The user's Firebase Auth UID
  * @param {string} gameId - The game ID they won
  * @param {string} gameName - The game name
  * @param {number} prizeAmount - The prize amount
+ * @param {string} gameType - 'physical' or 'battle_royale' (defaults to 'physical')
  */
-export const recordDailyWin = async (db, userId, gameId, gameName, prizeAmount) => {
+export const recordDailyWin = async (db, userId, gameId, gameName, prizeAmount, gameType = 'physical') => {
   try {
     const deviceId = await getDeviceId();
     const today = getTodayString();
 
-    // Update user's last win info
+    // Update user's last win info based on game type
     const userRef = doc(db, 'users', userId);
     const userDoc = await getDoc(userRef);
 
+    const winDateField = gameType === 'battle_royale' ? 'lastBattleRoyaleWinDate' : 'lastPhysicalWinDate';
+    
+    const updateData = {
+      [winDateField]: today,
+      lastWinDeviceId: deviceId,
+      lastWinGameId: gameId,
+      lastWinGameName: gameName,
+      lastWinAmount: prizeAmount,
+      lastWinAt: serverTimestamp(),
+      lastWinGameType: gameType,
+      totalWins: increment(1),
+      totalEarnings: increment(prizeAmount),
+    };
+
     if (userDoc.exists()) {
-      await updateDoc(userRef, {
-        lastWinDate: today,
-        lastWinDeviceId: deviceId,
-        lastWinGameId: gameId,
-        lastWinGameName: gameName,
-        lastWinAmount: prizeAmount,
-        lastWinAt: serverTimestamp(),
-        totalWins: increment(1),
-        totalEarnings: increment(prizeAmount),
-      });
+      await updateDoc(userRef, updateData);
     } else {
       // Create user doc if it doesn't exist
       await setDoc(userRef, {
-        lastWinDate: today,
-        lastWinDeviceId: deviceId,
-        lastWinGameId: gameId,
-        lastWinGameName: gameName,
-        lastWinAmount: prizeAmount,
-        lastWinAt: serverTimestamp(),
+        ...updateData,
         totalWins: 1,
         totalEarnings: prizeAmount,
         createdAt: serverTimestamp(),
@@ -115,18 +147,20 @@ export const recordDailyWin = async (db, userId, gameId, gameName, prizeAmount) 
     }
 
     // Also record in dailyWins collection (for device-level tracking)
-    const deviceWinRef = doc(db, 'dailyWins', `${today}_${deviceId}`);
+    // Include game type in the document ID for separate tracking
+    const deviceWinRef = doc(db, 'dailyWins', `${today}_${deviceId}_${gameType}`);
     await setDoc(deviceWinRef, {
       userId,
       deviceId,
       gameId,
       gameName,
       prizeAmount,
+      gameType,
       date: today,
       wonAt: serverTimestamp(),
     });
 
-    console.log('✅ Daily win recorded for user:', userId, 'device:', deviceId);
+    console.log(`✅ Daily ${gameType} win recorded for user:`, userId, 'device:', deviceId);
     return true;
   } catch (error) {
     console.error('Error recording daily win:', error);
@@ -204,8 +238,8 @@ export const processBattleRoyaleWinners = async (db, game, sendNotification = nu
       const entry = sortedLeaderboard[leaderboardIndex];
       leaderboardIndex++;
 
-      // Check if this player is eligible to win (hasn't won today)
-      const eligibility = await checkWinEligibility(db, entry.oderId);
+      // Check if this player is eligible to win a battle royale today
+      const eligibility = await checkWinEligibility(db, entry.oderId, 'battle_royale');
       
       if (!eligibility.eligible) {
         console.log(`⏭️ Skipping ${entry.username} - ${eligibility.reason}: ${eligibility.message}`);
@@ -264,8 +298,8 @@ export const processBattleRoyaleWinners = async (db, game, sendNotification = nu
           updatedAt: serverTimestamp(),
         });
 
-        // Record daily win to prevent multiple wins
-        await recordDailyWin(db, entry.oderId, game.id, game.name, winnerPrize);
+        // Record daily win to prevent multiple battle royale wins today
+        await recordDailyWin(db, entry.oderId, game.id, game.name, winnerPrize, 'battle_royale');
 
         console.log(`✅ Winner #${position}: ${entry.username} - $${winnerPrize}`);
 

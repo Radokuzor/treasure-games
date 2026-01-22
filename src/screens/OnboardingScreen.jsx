@@ -7,8 +7,6 @@ import * as Notifications from 'expo-notifications';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { registerForPushNotificationsAsync } from '../notificationService';
-import { getDeviceId } from '../utils/deviceId';
 import LottieView from 'lottie-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -28,6 +26,8 @@ import {
   View,
 } from 'react-native';
 import { getDb, getFirebaseAuth, getFirebaseStorage } from '../config/firebase';
+import { registerForPushNotificationsAsync } from '../notificationService';
+import { getDeviceId } from '../utils/deviceId';
 
 const { width, height } = Dimensions.get('window');
 const ONBOARDING_SEEN_KEY = 'hasSeenOnboarding_v4';

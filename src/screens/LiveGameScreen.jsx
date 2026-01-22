@@ -421,7 +421,9 @@ export default function LiveGameScreen({ route, navigation }) {
       if (!db) return;
 
       try {
-        const result = await checkWinEligibility(db, currentUser.uid);
+        // Check eligibility based on game type (physical vs battle_royale)
+        const gameType = game?.type === 'virtual' ? 'battle_royale' : 'physical';
+        const result = await checkWinEligibility(db, currentUser.uid, gameType);
         setWinEligible(result.eligible);
         setEligibilityChecked(true);
 
@@ -431,7 +433,7 @@ export default function LiveGameScreen({ route, navigation }) {
           showToast(result.message, 10000);
         }
 
-        console.log('🎯 Win eligibility check:', result.eligible ? 'ELIGIBLE' : 'NOT ELIGIBLE');
+        console.log(`🎯 Win eligibility check (${gameType}):`, result.eligible ? 'ELIGIBLE' : 'NOT ELIGIBLE');
       } catch (error) {
         console.error('Error checking eligibility:', error);
         // On error, allow them to play (fail open)
@@ -1258,12 +1260,13 @@ export default function LiveGameScreen({ route, navigation }) {
       const gameRef = doc(db, 'games', gameId);
       const userRef = doc(db, 'users', currentUser.uid);
 
-      // Check win eligibility (daily limit) - do a fresh check
-      const eligibility = await checkWinEligibility(db, currentUser.uid);
+      // Check win eligibility (daily limit) - do a fresh check based on game type
+      const gameType = isVirtual ? 'battle_royale' : 'physical';
+      const eligibility = await checkWinEligibility(db, currentUser.uid, gameType);
       
       if (!eligibility.eligible) {
-        // User already won today - let them know but don't add to winners
-        console.log('🚫 User not eligible for win (daily limit):', eligibility.reason);
+        // User already won this type of game today - let them know but don't add to winners
+        console.log(`🚫 User not eligible for ${gameType} win (daily limit):`, eligibility.reason);
         showToast(eligibility.message || "You've already won today! Great game though!", 10000);
         return;
       }
@@ -1331,13 +1334,15 @@ export default function LiveGameScreen({ route, navigation }) {
       });
 
       if (didWin) {
-        // Record the daily win for eligibility tracking
+        // Record the daily win for eligibility tracking (by game type)
+        const gameType = isVirtual ? 'battle_royale' : 'physical';
         await recordDailyWin(
           db,
           currentUser.uid,
           gameId,
           game.name,
-          Number(game.prizeAmount) || 0
+          Number(game.prizeAmount) || 0,
+          gameType
         );
 
         setIsWinner(true);
