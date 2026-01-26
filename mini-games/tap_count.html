@@ -299,7 +299,7 @@
 
       const countdownInterval = setInterval(() => {
         count--;
-        if (count > 0) {
+        if (count >= 1) {
           countdownNumber.textContent = count;
           countdownNumber.style.animation = 'none';
           countdownNumber.offsetHeight; // Trigger reflow
@@ -307,6 +307,9 @@
         } else if (count === 0) {
           countdownNumber.textContent = 'GO!';
           countdownNumber.style.color = '#10B981';
+          countdownNumber.style.animation = 'none';
+          countdownNumber.offsetHeight; // Trigger reflow
+          countdownNumber.style.animation = 'countdownPulse 1s ease-in-out';
         } else {
           clearInterval(countdownInterval);
           countdownOverlay.classList.add('hidden');

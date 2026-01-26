@@ -4,6 +4,7 @@ import {
   Timestamp,
   arrayUnion,
   doc,
+  getDoc,
   increment,
   onSnapshot,
   runTransaction,
@@ -44,11 +45,11 @@ if (Platform.OS !== 'web') {
   ConfettiCannon = require('react-native-confetti').default;
 }
 
-import { getFirebaseAuth, getFirebaseDb } from '../config/firebase';
 import MiniGameWebView from '../components/MiniGameWebView';
-import WinnerCardScreen from './WinnerCardScreen';
-import { checkWinEligibility, recordDailyWin, processBattleRoyaleWinners } from '../utils/winEligibility';
+import { getFirebaseAuth, getFirebaseDb } from '../config/firebase';
 import { sendPushNotification } from '../notificationService';
+import { checkWinEligibility, processBattleRoyaleWinners, recordDailyWin } from '../utils/winEligibility';
+import WinnerCardScreen from './WinnerCardScreen';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CAROUSEL_HEIGHT = 400;
@@ -473,54 +474,300 @@ export default function LiveGameScreen({ route, navigation }) {
     return () => clearInterval(interval);
   }, [game?.virtualGame?.endsAt]);
 
-  // Auto-complete virtual game when timer ends
+  // Auto-complete virtual game when timer ends - check directly from endsAt timestamp
+  // Use ref to prevent duplicate processing
+  const processingWinnersRef = useRef(false);
+  
   useEffect(() => {
-    if (!competitionEnded || !game || game.type !== 'virtual') return;
+    if (!game || game.type !== 'virtual' || !game.virtualGame?.endsAt) return;
     if (game.status === 'completed') return; // Already completed
     
-    const completeGame = async () => {
+    const checkAndComplete = async () => {
+      const endsAt = game.virtualGame.endsAt?.toDate?.() || new Date(game.virtualGame.endsAt);
+      const now = new Date();
+      const hasEnded = endsAt.getTime() <= now.getTime();
+      
+      if (!hasEnded) {
+        // Log every 10 seconds to verify it's checking
+        if (Math.floor(Date.now() / 1000) % 10 === 0) {
+          const remaining = Math.floor((endsAt.getTime() - now.getTime()) / 1000);
+          console.log(`⏱️ Tournament timer check: ${remaining}s remaining`);
+        }
+        return; // Competition hasn't ended yet
+      }
+      
+      // CRITICAL FIX: Prevent duplicate processing
+      if (processingWinnersRef.current) {
+        console.log('🔒 Already processing winners, skipping...');
+        return;
+      }
+      
+      console.log('🏁 ========================================');
+      console.log('🏁 Tournament timer has ended!');
+      console.log('🏁 Game ID:', gameId);
+      console.log('🏁 Current user:', currentUser?.uid);
+      console.log('🏁 ========================================');
+      
+      processingWinnersRef.current = true; // Lock processing
+      
       try {
         const db = getFirebaseDb();
-        if (!db) return;
+        if (!db) {
+          console.error('❌ No database connection!');
+          processingWinnersRef.current = false;
+          return;
+        }
         
         const gameRef = doc(db, 'games', gameId);
         
-        // Process winners and award prizes (with push notifications)
-        const winners = await processBattleRoyaleWinners(db, { ...game, id: gameId }, sendPushNotification);
+        // Get fresh game data to ensure we have latest leaderboard
+        const gameSnap = await getDoc(gameRef);
+        if (!gameSnap.exists()) {
+          console.error('❌ Game document not found!');
+          processingWinnersRef.current = false;
+          return;
+        }
+        const currentGameData = { ...gameSnap.data(), id: gameId };
         
-        // Mark game as completed with winner info
+        // CRITICAL: Check if already completed in database
+        if (currentGameData.status === 'completed') {
+          console.log('✅ Game already completed in database, skipping');
+          processingWinnersRef.current = false;
+          return;
+        }
+        
+        console.log('🏁 Game data:', {
+          name: currentGameData.name,
+          prizeAmount: currentGameData.prizeAmount,
+          winnerSlots: currentGameData.winnerSlots,
+          leaderboardCount: currentGameData.leaderboard?.length || 0,
+          status: currentGameData.status,
+        });
+        
+        // Handle case where no one played - still complete the game with no winners
+        if (!currentGameData.leaderboard || currentGameData.leaderboard.length === 0) {
+          console.log('ℹ️ No leaderboard entries found - completing game with no winners');
+          
+          // Use transaction to atomically set processing flag and check status
+          let shouldProcess = false;
+          
+          try {
+            await runTransaction(db, async (transaction) => {
+              const gameSnap = await transaction.get(gameRef);
+              if (!gameSnap.exists()) {
+                throw new Error('Game not found');
+              }
+              
+              const transactionGameData = gameSnap.data();
+              
+              // CRITICAL: Check if already completed or processing
+              if (transactionGameData.status === 'completed') {
+                console.log('✅ Game already completed, skipping');
+                return; // Exit transaction
+              }
+              
+              if (transactionGameData.processingWinners === true) {
+                console.log('🔒 Game is already being processed by another instance, skipping');
+                return; // Exit transaction
+              }
+              
+              // Atomically set processing flag
+              transaction.update(gameRef, {
+                processingWinners: true,
+                updatedAt: serverTimestamp(),
+              });
+              
+              shouldProcess = true;
+              console.log('🔒 Processing lock acquired in transaction');
+            });
+          } catch (transactionError) {
+            console.error('❌ Transaction error:', transactionError);
+            processingWinnersRef.current = false;
+            return;
+          }
+          
+          if (!shouldProcess) {
+            console.log('ℹ️ Skipping winner processing (already completed or being processed)');
+            processingWinnersRef.current = false;
+            return;
+          }
+          
+          // Complete game with no winners
+          await updateDoc(gameRef, {
+            status: 'completed',
+            completedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            tournamentWinners: [], // Empty winners array
+            processingWinners: false, // Clear processing flag
+          });
+          
+          console.log('✅ Game completed successfully with no winners');
+          processingWinnersRef.current = false;
+          return;
+        }
+        
+        // Check if current user is in leaderboard
+        const userEntry = currentGameData.leaderboard.find(e => e.oderId === currentUser?.uid);
+        if (userEntry) {
+          const sorted = [...currentGameData.leaderboard].sort((a, b) => {
+            if (currentGameData.virtualGame?.type === 'tap_count') {
+              return a.score - b.score;
+            }
+            return b.score - a.score;
+          });
+          const userRank = sorted.findIndex(e => e.oderId === currentUser?.uid) + 1;
+          console.log(`🏁 Current user rank: #${userRank} with score: ${userEntry.score}`);
+        } else {
+          console.log('⚠️ Current user not found in leaderboard');
+        }
+        
+        // Use transaction to atomically set processing flag and check status
+        let shouldProcess = false;
+        
+        try {
+          await runTransaction(db, async (transaction) => {
+            const gameSnap = await transaction.get(gameRef);
+            if (!gameSnap.exists()) {
+              throw new Error('Game not found');
+            }
+            
+            const transactionGameData = gameSnap.data();
+            
+            // CRITICAL: Check if already completed or processing
+            if (transactionGameData.status === 'completed') {
+              console.log('✅ Game already completed, skipping');
+              return; // Exit transaction
+            }
+            
+            if (transactionGameData.processingWinners === true) {
+              console.log('🔒 Game is already being processed by another instance, skipping');
+              return; // Exit transaction
+            }
+            
+            // Atomically set processing flag
+            transaction.update(gameRef, {
+              processingWinners: true,
+              updatedAt: serverTimestamp(),
+            });
+            
+            shouldProcess = true;
+            console.log('🔒 Processing lock acquired in transaction');
+          });
+        } catch (transactionError) {
+          console.error('❌ Transaction error:', transactionError);
+          processingWinnersRef.current = false;
+          return;
+        }
+        
+        if (!shouldProcess) {
+          console.log('ℹ️ Skipping winner processing (already completed or being processed)');
+          processingWinnersRef.current = false;
+          return;
+        }
+        
+        // Process winners and award prizes (outside transaction)
+        console.log('🏁 Calling processBattleRoyaleWinners...');
+        const winners = await processBattleRoyaleWinners(db, currentGameData, sendPushNotification);
+        console.log('🏁 Winners returned:', winners.length);
+        console.log('🏁 Winners:', winners.map(w => ({ position: w.position, username: w.username, prize: w.prizeAmount, userId: w.oderId })));
+        
+        // Complete game even if no winners (shouldn't happen if leaderboard had entries, but handle gracefully)
+        if (winners.length === 0) {
+          console.log('ℹ️ No winners were processed - completing game with no winners');
+          // Still complete the game, just with no winners
+          await updateDoc(gameRef, {
+            status: 'completed',
+            completedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            tournamentWinners: [], // Empty winners array
+            processingWinners: false, // Clear processing flag
+          });
+          console.log('✅ Game completed successfully with no winners');
+          processingWinnersRef.current = false;
+          return;
+        }
+        
+        // Update game object with winners and clear processing flag
         await updateDoc(gameRef, {
           status: 'completed',
           completedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-          battleRoyaleWinners: winners,
+          tournamentWinners: winners,
+          processingWinners: false, // Clear processing flag
         });
         
-        console.log('🏁 Virtual game auto-completed:', gameId);
-        console.log('🏆 Winners:', winners);
+        console.log('✅ Game completed successfully');
         
-        // Show notification to current user if they're a winner
+        // Show winner card or score card to current user if they won
         const userWin = winners.find(w => w.oderId === currentUser?.uid);
         if (userWin) {
-          showToast(`🎉 You won #${userWin.position}! Prize: $${userWin.prizeAmount}. Claim within 30 min!`);
-          if (Platform.OS !== 'web' && Haptics) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          const isEligibleWinner = userWin.eligible !== false; // Default to true if not set
+          
+          if (isEligibleWinner) {
+            // Eligible winner - show winner card with celebration
+            console.log(`🎉 User won! Position: #${userWin.position}, Prize: $${userWin.prizeAmount}`);
+            // Update eligibility state - user has won today
+            setWinEligible(false);
+            setEligibilityMessage("🏆 You've already won a tournament today! Play for fun, but prizes go to other players.");
+            showToast(`🎉 You won #${userWin.position}! Prize: $${userWin.prizeAmount}!`);
+            if (Platform.OS !== 'web' && Haptics) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+            
+            setTimeout(() => {
+              setWinnerCardData({
+                gameName: currentGameData.name,
+                position: userWin.position,
+                score: userWin.score,
+                gameType: 'virtual',
+                wonMoney: true, // Eligible winner gets prize
+                city: currentGameData.city || null,
+                sponsorLogo: currentGameData.sponsorLogo || null,
+                sponsorName: currentGameData.sponsorName || null,
+                isCompetitionActive: false,
+              });
+              setShowWinnerCard(true);
+            }, 1000);
+          } else {
+            // Ineligible winner - show score card only (no prize, no celebration)
+            console.log(`📊 User finished #${userWin.position} but already won today - showing score card only`);
+            showToast(`📊 You finished #${userWin.position}! Great game, but you already won today.`, 4000);
+            
+            setTimeout(() => {
+              setWinnerCardData({
+                gameName: currentGameData.name,
+                position: userWin.position,
+                score: userWin.score,
+                gameType: 'virtual',
+                wonMoney: false, // No prize for ineligible winner
+                city: currentGameData.city || null,
+                sponsorLogo: currentGameData.sponsorLogo || null,
+                sponsorName: currentGameData.sponsorName || null,
+                isCompetitionActive: false,
+              });
+              setShowWinnerCard(true);
+            }, 1000);
           }
         } else {
-          // Check if they were on the leaderboard at all
-          const leaderboard = game.leaderboard || [];
-          const userRankIndex = leaderboard.findIndex(entry => entry.oderId === currentUser?.uid);
-          if (userRankIndex >= 0) {
-            showToast(`Competition ended! You finished #${userRankIndex + 1}. Better luck next time!`);
-          }
+          console.log('ℹ️ Current user did not win (not in top winners)');
         }
       } catch (error) {
-        console.error('Error auto-completing game:', error);
+        console.error('❌ Error completing tournament:', error);
+        console.error('Error details:', error.message, error.code);
+        console.error('Error stack:', error.stack);
+        processingWinnersRef.current = false; // Unlock on error
       }
     };
     
-    completeGame();
-  }, [competitionEnded, game?.status, gameId]);
+    // Check every 5 seconds instead of every 1 second
+    checkAndComplete(); // Check immediately
+    const interval = setInterval(checkAndComplete, 5000);
+    
+    return () => {
+      clearInterval(interval);
+      processingWinnersRef.current = false; // Reset on cleanup
+    };
+  }, [game?.virtualGame?.endsAt, game?.status, gameId, currentUser?.uid]);
 
   // Track user's rank in leaderboard
   useEffect(() => {
@@ -603,27 +850,51 @@ export default function LiveGameScreen({ route, navigation }) {
     return () => clearTimeout(timer);
   }, [game?.type, showPodium]);
 
-  // Auto-join game when screen loads
+  // Auto-join game when screen loads - use transaction to prevent race conditions
+  const joiningRef = useRef(false);
+  
   useEffect(() => {
     if (!game || !currentUser || hasJoined) return;
+    if (joiningRef.current) return; // Prevent duplicate calls
 
     const joinGame = async () => {
+      joiningRef.current = true;
+      
       try {
         const db = getFirebaseDb();
-        const gameRef = doc(db, 'games', gameId);
-
-        // Add user to participants if not already there
-        if (!game.participants?.includes(currentUser.uid)) {
-          await updateDoc(gameRef, {
-            participants: arrayUnion(currentUser.uid),
-            updatedAt: serverTimestamp(),
-          });
-          console.log('✅ Auto-joined game:', gameId);
+        if (!db) {
+          joiningRef.current = false;
+          return;
         }
-
+        
+        const gameRef = doc(db, 'games', gameId);
+        
+        // Use transaction to prevent race conditions
+        await runTransaction(db, async (transaction) => {
+          const gameSnap = await transaction.get(gameRef);
+          if (!gameSnap.exists()) {
+            throw new Error('Game not found');
+          }
+          
+          const gameData = gameSnap.data();
+          const participants = gameData.participants || [];
+          
+          // Only add if not already in participants
+          if (!participants.includes(currentUser.uid)) {
+            transaction.update(gameRef, {
+              participants: arrayUnion(currentUser.uid),
+              updatedAt: serverTimestamp(),
+            });
+            console.log('✅ Auto-joined game:', gameId);
+          } else {
+            console.log('ℹ️ Already in participants');
+          }
+        });
+        
         setHasJoined(true);
       } catch (error) {
         console.error('❌ Error joining game:', error);
+        joiningRef.current = false; // Allow retry on error
       }
     };
 
@@ -1000,41 +1271,78 @@ export default function LiveGameScreen({ route, navigation }) {
   const getMiniGameConfig = () => {
     const source = getGameSource();
     
+    // Calculate remaining time in seconds for the game
+    const getRemainingTimeInSeconds = () => {
+      console.log('🎮 getRemainingTimeInSeconds - timeRemaining:', timeRemaining, 'endsAt:', game?.virtualGame?.endsAt);
+      
+      if (timeRemaining !== null && timeRemaining > 0) {
+        const seconds = Math.floor(timeRemaining / 1000);
+        console.log('🎮 Using timeRemaining:', seconds, 'seconds');
+        return seconds; // Convert ms to seconds
+      }
+      // Fallback: calculate from endsAt if available
+      if (game?.virtualGame?.endsAt) {
+        const endsAt = game.virtualGame.endsAt?.toDate?.() || new Date(game.virtualGame.endsAt);
+        const remaining = Math.floor((endsAt.getTime() - Date.now()) / 1000);
+        console.log('🎮 Calculated from endsAt:', remaining, 'seconds');
+        return Math.max(0, remaining);
+      }
+      console.log('🎮 Using default 900 seconds');
+      return 900; // Default 15 minutes
+    };
+    
     // Handle legacy virtual games that don't have virtualGame object
     if (isVirtualGame && !source) {
       // Use legacy targetTaps field if available
       return {
         targetTaps: game?.targetTaps || 100,
         timeLimit: 30,
+        remainingTime: getRemainingTimeInSeconds(),
       };
     }
     
-    if (!source) return {};
+    if (!source) return { remainingTime: getRemainingTimeInSeconds() };
 
     const { type, config } = source;
+
+    // Base config with remaining time for all game types
+    const baseConfig = {
+      remainingTime: getRemainingTimeInSeconds(),
+    };
 
     switch (type) {
       case 'tap_count':
         return {
+          ...baseConfig,
           targetTaps: config?.targetTaps || 100,
           timeLimit: config?.timeLimit || 30,
         };
       case 'hold_duration':
         return {
+          ...baseConfig,
           holdDuration: config?.holdDuration || 5000,
         };
       case 'rhythm_tap':
         return {
+          ...baseConfig,
           bpm: config?.bpm || 120,
           requiredBeats: config?.requiredBeats || 10,
           toleranceMs: config?.toleranceMs || 150,
           requiredScore: config?.requiredScore || 70,
         };
+      case 'last_stand':
+      case 'tetris':
+      case 'flappy_bird':
+        // These games use remainingTime for their countdown
+        return {
+          ...baseConfig,
+          gameTime: config?.gameTime || getRemainingTimeInSeconds(),
+        };
       case 'custom':
-        // Custom games receive all config as-is
-        return config || {};
+        // Custom games receive all config as-is plus remaining time
+        return { ...baseConfig, ...(config || {}) };
       default:
-        return {};
+        return baseConfig;
     }
   };
 
@@ -1073,13 +1381,15 @@ export default function LiveGameScreen({ route, navigation }) {
 
   // Handle mini-game completion
   const handleMiniGameComplete = async (success, data) => {
-    console.log('🎮 Mini-game result:', { success, data });
+    console.log('🎮 Mini-game result:', { success, data, isVirtualGame, gameType: game?.type });
     setShowMiniGame(false);
     setShowPodium(true); // Show podium again after mini-game completes
     setMiniGameCompleted(true);
 
-    // For virtual games (battle royale), update leaderboard instead of immediate win
-    if (isVirtualGame && game.virtualGame?.endsAt) {
+    // For virtual games (battle royale), update leaderboard
+    // Note: We check isVirtualGame OR game.type === 'virtual' to handle all cases
+    if (isVirtualGame || game?.type === 'virtual') {
+      console.log('🎮 Virtual game detected, updating leaderboard...');
       await updateBattleRoyaleScore(success, data);
       return;
     }
@@ -1101,15 +1411,25 @@ export default function LiveGameScreen({ route, navigation }) {
 
   // Update battle royale leaderboard score
   const updateBattleRoyaleScore = async (success, data) => {
-    if (!game || !currentUser) return;
+    console.log('🏆 updateBattleRoyaleScore called:', { success, data, hasGame: !!game, hasUser: !!currentUser });
+    
+    if (!game || !currentUser) {
+      console.log('🏆 Early return - missing game or user');
+      return;
+    }
 
     try {
       const db = getFirebaseDb();
+      if (!db) {
+        console.log('🏆 Early return - no database');
+        return;
+      }
+      
       const gameRef = doc(db, 'games', gameId);
 
       // Calculate score based on game type
       let score = 0;
-      const gameType = game.virtualGame?.type;
+      const gameType = game.virtualGame?.type || game.virtualType || 'custom';
 
       if (gameType === 'tap_count') {
         // For tap games, score is time to complete (lower is better)
@@ -1121,11 +1441,11 @@ export default function LiveGameScreen({ route, navigation }) {
         // For rhythm games, use the calculated score
         score = data?.score || 0;
       } else {
-        // Default: use any score provided
+        // Default/custom games: use any score provided (higher is better)
         score = data?.score || data?.timeMs || 0;
       }
 
-      console.log('🏆 Battle Royale score:', { gameType, score, data });
+      console.log('🏆 Battle Royale score calculated:', { gameType, score, data });
 
       // Get current leaderboard
       const currentLeaderboard = game.leaderboard || [];
@@ -1185,42 +1505,49 @@ export default function LiveGameScreen({ route, navigation }) {
       });
 
       // Save to Firestore
-      await updateDoc(gameRef, {
-        leaderboard: updatedLeaderboard,
-        updatedAt: serverTimestamp(),
-      });
+      console.log('🏆 ========================================');
+      console.log('🏆 Saving score to leaderboard');
+      console.log('🏆 Game ID:', gameId);
+      console.log('🏆 User ID:', currentUser.uid);
+      console.log('🏆 Score:', score);
+      console.log('🏆 Leaderboard length:', updatedLeaderboard.length);
+      console.log('🏆 User entry:', newEntry);
+      console.log('🏆 ========================================');
+      
+      try {
+        await updateDoc(gameRef, {
+          leaderboard: updatedLeaderboard,
+          updatedAt: serverTimestamp(),
+        });
+        console.log('✅ Leaderboard saved successfully!');
+        
+        // Verify it was saved
+        const verifySnap = await getDoc(gameRef);
+        const verifyData = verifySnap.data();
+        const verifyEntry = verifyData.leaderboard?.find(e => e.oderId === currentUser.uid);
+        if (verifyEntry) {
+          console.log('✅ Verified: User entry in leaderboard:', verifyEntry);
+        } else {
+          console.error('❌ ERROR: User entry NOT found in leaderboard after save!');
+        }
+      } catch (error) {
+        console.error('❌ ERROR saving leaderboard:', error);
+        console.error('Error details:', error.message, error.code);
+        throw error; // Re-throw to be caught by outer try/catch
+      }
 
       // Find user's new rank
       const newRank = updatedLeaderboard.findIndex(
         entry => entry.oderId === currentUser.uid
       ) + 1;
 
-      // Show appropriate message and winner card for top 3
+      // Show feedback to user
       if (shouldUpdate) {
         if (newRank <= 3) {
           showToast(`🎉 New high score! You're now #${newRank}!`);
           if (Platform.OS !== 'web' && Haptics) {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
-          
-          // Show winner card for top 3 in Battle Royale
-          // wonMoney is true only if user is eligible (hasn't won today yet)
-          // Note: winEligible reflects the state at game load, actual money win
-          // happens when Battle Royale ends and processBattleRoyaleWinners runs
-          setTimeout(() => {
-            setWinnerCardData({
-              gameName: game.name,
-              position: newRank,
-              score: newEntry.score,
-              gameType: 'virtual',
-              wonMoney: false, // Battle Royale: money is awarded at end, this is just achievement
-              city: game.city || null,
-              sponsorLogo: game.sponsorLogo || null,
-              sponsorName: game.sponsorName || null,
-              isCompetitionActive: true, // Competition is still ongoing
-            });
-            setShowWinnerCard(true);
-          }, 1500);
         } else {
           showToast(`New personal best! Rank: #${newRank}`);
         }
@@ -1915,8 +2242,16 @@ export default function LiveGameScreen({ route, navigation }) {
               {!showMiniGame && (
                 <TouchableOpacity
                   style={styles.playNowButton}
-                  onPress={() => {
+                  onPress={async () => {
                     console.log('🎮 Enter Game button pressed!');
+                    
+                    // Check eligibility before opening game
+                    if (isVirtualGame && eligibilityChecked && !winEligible) {
+                      // User already won today - show message but still allow play
+                      const message = eligibilityMessage || "🏆 You've already won today! This game is just for fun - no prizes will be awarded.";
+                      showToast(message, 5000);
+                    }
+                    
                     if (miniGameCompleted) {
                       setMiniGameCompleted(false);
                     }

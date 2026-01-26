@@ -1,0 +1,79 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // App config - readable by anyone (for force update check)
+    match /config/{document} {
+      allow read: if true;
+      allow write: if false; // Only admin console can write
+    }
+    
+    // Users collection - authenticated users can read all, update any (for tournament prize awards)
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null; // Allow updates for tournament prize awards
+      allow delete: if false; // Prevent accidental deletion
+    }
+    
+    // Games collection - authenticated users can read and update (for leaderboard updates)
+    // Only admins can create new games
+    match /games/{gameId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      allow update: if request.auth != null; // Allow updates for leaderboard and tournament completion
+      allow delete: if false; // Prevent accidental deletion
+    }
+    
+    // Leaderboard entries within games (if using subcollection - currently not used, but kept for future)
+    match /games/{gameId}/leaderboard/{entryId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == resource.data.oderId;
+      allow delete: if false;
+    }
+    
+    // Redemptions - users can create/read their own
+    match /redemptions/{redemptionId} {
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      allow delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Daily wins tracking
+    match /dailyWins/{winId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // Home media (community posts)
+    match /homeMedia/{mediaId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
+      allow delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Comments on media
+    match /homeMedia/{mediaId}/comments/{commentId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow delete: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
+    }
+  }
+}

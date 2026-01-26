@@ -26,6 +26,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerForPushNotificationsAsync } from '../notificationService';
 import { getDeviceId } from '../utils/deviceId';
 import * as Notifications from 'expo-notifications';
+import * as Location from 'expo-location';
 
 // Conditionally import expo-av components only for native
 let Audio, Video;
@@ -160,6 +161,54 @@ const HomeScreen = () => {
 
     // Run the check after a short delay to not block initial render
     const timer = setTimeout(checkAndUpdateUserTokens, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Request permissions if not granted (runs once on home screen load)
+  useEffect(() => {
+    const requestMissingPermissions = async () => {
+      try {
+        // Check and request location permission
+        const { status: locationStatus } = await Location.getForegroundPermissionsAsync();
+        if (locationStatus !== 'granted' && locationStatus !== 'denied') {
+          console.log('📍 HomeScreen: Requesting location permission...');
+          await Location.requestForegroundPermissionsAsync();
+        }
+
+        // Check and request notification permission
+        const { status: notifStatus } = await Notifications.getPermissionsAsync();
+        if (notifStatus !== 'granted' && notifStatus !== 'denied') {
+          console.log('🔔 HomeScreen: Requesting notification permission...');
+          const { status: newStatus } = await Notifications.requestPermissionsAsync();
+          
+          // If permission was just granted, try to get push token
+          if (newStatus === 'granted') {
+            const auth = getFirebaseAuth();
+            const user = auth?.currentUser;
+            if (user) {
+              const db = getDb();
+              if (db) {
+                const pushToken = await registerForPushNotificationsAsync();
+                if (pushToken) {
+                  const userRef = doc(db, 'users', user.uid);
+                  await updateDoc(userRef, {
+                    pushToken,
+                    pushTokenUpdatedAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                  });
+                  console.log('✅ HomeScreen: Push token saved after permission grant');
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.log('Permission request error:', error?.message ?? error);
+      }
+    };
+
+    // Delay permission requests to not overwhelm user on first load
+    const timer = setTimeout(requestMissingPermissions, 3000);
     return () => clearTimeout(timer);
   }, []);
 

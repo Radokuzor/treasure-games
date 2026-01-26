@@ -10,6 +10,7 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import LottieView from 'lottie-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   FlatList,
@@ -33,57 +34,16 @@ const { width, height } = Dimensions.get('window');
 const ONBOARDING_SEEN_KEY = 'hasSeenOnboarding_v4';
 
 const US_STATES = [
-  { code: 'DC', name: 'District of Columbia' },
-  { code: 'AL', name: 'Alabama' },
-  { code: 'AK', name: 'Alaska' },
-  { code: 'AZ', name: 'Arizona' },
-  { code: 'AR', name: 'Arkansas' },
-  { code: 'CA', name: 'California' },
-  { code: 'CO', name: 'Colorado' },
-  { code: 'CT', name: 'Connecticut' },
-  { code: 'DE', name: 'Delaware' },
-  { code: 'FL', name: 'Florida' },
-  { code: 'GA', name: 'Georgia' },
-  { code: 'HI', name: 'Hawaii' },
-  { code: 'ID', name: 'Idaho' },
-  { code: 'IL', name: 'Illinois' },
-  { code: 'IN', name: 'Indiana' },
-  { code: 'IA', name: 'Iowa' },
-  { code: 'KS', name: 'Kansas' },
-  { code: 'KY', name: 'Kentucky' },
-  { code: 'LA', name: 'Louisiana' },
-  { code: 'ME', name: 'Maine' },
-  { code: 'MD', name: 'Maryland' },
-  { code: 'MA', name: 'Massachusetts' },
-  { code: 'MI', name: 'Michigan' },
-  { code: 'MN', name: 'Minnesota' },
-  { code: 'MS', name: 'Mississippi' },
-  { code: 'MO', name: 'Missouri' },
-  { code: 'MT', name: 'Montana' },
-  { code: 'NE', name: 'Nebraska' },
-  { code: 'NV', name: 'Nevada' },
-  { code: 'NH', name: 'New Hampshire' },
-  { code: 'NJ', name: 'New Jersey' },
-  { code: 'NM', name: 'New Mexico' },
-  { code: 'NY', name: 'New York' },
-  { code: 'NC', name: 'North Carolina' },
-  { code: 'ND', name: 'North Dakota' },
-  { code: 'OH', name: 'Ohio' },
-  { code: 'OK', name: 'Oklahoma' },
-  { code: 'OR', name: 'Oregon' },
-  { code: 'PA', name: 'Pennsylvania' },
-  { code: 'RI', name: 'Rhode Island' },
-  { code: 'SC', name: 'South Carolina' },
-  { code: 'SD', name: 'South Dakota' },
-  { code: 'TN', name: 'Tennessee' },
   { code: 'TX', name: 'Texas' },
-  { code: 'UT', name: 'Utah' },
-  { code: 'VT', name: 'Vermont' },
-  { code: 'VA', name: 'Virginia' },
-  { code: 'WA', name: 'Washington' },
-  { code: 'WV', name: 'West Virginia' },
-  { code: 'WI', name: 'Wisconsin' },
-  { code: 'WY', name: 'Wyoming' },
+];
+
+const TEXAS_CITIES = [
+  'Austin',
+  'Dallas',
+  'Houston',
+  'San Antonio',
+  'College Station',
+  'San Marcos',
 ];
 
 const OnboardingScreen = ({ navigation }) => {
@@ -96,16 +56,18 @@ const OnboardingScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
+  const [phone, setPhone] = useState('');
+  const [city, setCity] = useState('Austin');
+  const [state, setState] = useState('TX');
   const [age, setAge] = useState('');
   const [profileImage, setProfileImage] = useState(null);
   const [isStatePickerOpen, setIsStatePickerOpen] = useState(false);
   const [isCityPickerOpen, setIsCityPickerOpen] = useState(false);
   const [isAgePickerOpen, setIsAgePickerOpen] = useState(false);
-  const [cities, setCities] = useState([]);
+  const [cities, setCities] = useState(TEXAS_CITIES);
   const [agreedToEULA, setAgreedToEULA] = useState(false);
   const [agreedToSMS, setAgreedToSMS] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -164,7 +126,7 @@ const OnboardingScreen = ({ navigation }) => {
   };
 
   const nextSlide = () => {
-    if (currentSlide < 9) {
+    if (currentSlide < 6) {
       const nextIndex = currentSlide + 1;
       setCurrentSlide(nextIndex);
 
@@ -180,13 +142,13 @@ const OnboardingScreen = ({ navigation }) => {
 
   const skipToSignup = () => {
     // Set slide first, then scroll after state update
-    setCurrentSlide(9);
+    setCurrentSlide(6);
 
     // Use setTimeout to ensure state update completes before scrolling
     // This prevents race conditions on web
     setTimeout(() => {
       scrollViewRef.current?.scrollTo({
-        x: 9 * width,
+        x: 6 * width,
         animated: Platform.OS !== 'web' // Disable animation on web for reliability
       });
     }, 50);
@@ -256,24 +218,60 @@ const OnboardingScreen = ({ navigation }) => {
   };
 
   const requestLocationPermission = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status === 'granted') {
-      await tryAutofillCityStateFromLocation();
+    try {
+      // Check if already determined
+      const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+      
+      if (existingStatus === 'undetermined') {
+        // Request permission - this will show the popup
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          await tryAutofillCityStateFromLocation();
+        }
+      } else if (existingStatus === 'granted') {
+        // Already granted, try to autofill
+        await tryAutofillCityStateFromLocation();
+      }
+      // Always advance to next slide regardless of permission result
+      nextSlide();
+    } catch (error) {
+      console.log('Location permission error:', error?.message ?? error);
+      // Still advance on error
       nextSlide();
     }
   };
 
   const requestNotificationPermission = async () => {
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status === 'granted') {
+    try {
+      // Check if already determined
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      
+      if (existingStatus === 'undetermined') {
+        // Request permission - this will show the popup
+        await Notifications.requestPermissionsAsync();
+      }
+      // Always advance to next slide regardless of permission result
+      nextSlide();
+    } catch (error) {
+      console.log('Notification permission error:', error?.message ?? error);
+      // Still advance on error
       nextSlide();
     }
   };
 
   const handleSignup = async () => {
+    if (isSubmitting) return;
+
     // Validate fields
-    if (!email || !password || !firstName || !lastName || !city || !state || !age) {
+    if (!email || !password || !firstName || !lastName || !phone || !city || !state || !age) {
       alert('Please fill in all fields');
+      return;
+    }
+
+    // Basic phone validation (at least 10 digits)
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      alert('Please enter a valid phone number');
       return;
     }
 
@@ -282,7 +280,9 @@ const OnboardingScreen = ({ navigation }) => {
       return;
     }
 
+    let didNavigate = false;
     try {
+      setIsSubmitting(true);
       // Get Firebase instances
       const auth = getFirebaseAuth();
       const db = getDb();
@@ -321,9 +321,16 @@ const OnboardingScreen = ({ navigation }) => {
       } catch (e) {
         console.log('Could not get device ID:', e?.message ?? e);
       }
+      
+      // Only try to get push token if notification permission is granted
       try {
-        pushToken = await registerForPushNotificationsAsync();
-        console.log('📱 Push token:', pushToken);
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status === 'granted') {
+          pushToken = await registerForPushNotificationsAsync();
+          console.log('📱 Push token:', pushToken);
+        } else {
+          console.log('📱 Notification permission not granted, skipping push token');
+        }
       } catch (e) {
         console.log('Could not get push token:', e?.message ?? e);
       }
@@ -333,6 +340,7 @@ const OnboardingScreen = ({ navigation }) => {
         email: email.trim(),
         firstName: firstName.trim(),
         lastName: lastName.trim(),
+        phone: phone.replace(/\D/g, ''), // Store only digits
         city: city.trim(),
         state: state.trim().toUpperCase(),
         age: Number(age) || null,
@@ -349,48 +357,30 @@ const OnboardingScreen = ({ navigation }) => {
 
       // Mark onboarding as complete and navigate to main app
       await AsyncStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+      didNavigate = true;
       navigation.replace('MainTabs');
     } catch (error) {
       console.error('❌ Signup error:', error);
       alert(error?.message || 'Failed to create account. Please try again.');
+    } finally {
+      if (!didNavigate) setIsSubmitting(false);
     }
   };
 
   const handleSelectState = async (stateCode) => {
     const nextState = String(stateCode || '').toUpperCase();
-    const stateName = US_STATES.find(s => s.code === stateCode)?.name || '';
 
     setState(nextState);
     setIsStatePickerOpen(false);
-    setCity(''); // Reset city when state changes
-    setCities([]); // Clear cities while loading
-
-    // Fetch cities from API
-    try {
-      const response = await fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          country: 'United States',
-          state: stateName
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.error === false && data.data && Array.isArray(data.data)) {
-        const sortedCities = data.data.sort();
-        console.log('State selected:', nextState, 'Cities found:', sortedCities.length);
-        setCities(sortedCities);
-      } else {
-        console.log('No cities found in API response');
-        setCities([]);
-      }
-    } catch (error) {
-      console.error('Error fetching cities:', error);
+    setCity('Austin'); // Default to Austin when state changes
+    
+    // Use hardcoded Texas cities
+    if (nextState === 'TX') {
+      setCities(TEXAS_CITIES);
+      console.log('State selected:', nextState, 'Cities:', TEXAS_CITIES.length);
+    } else {
       setCities([]);
+      console.log('Non-Texas state selected, no cities available');
     }
   };
 
@@ -801,6 +791,17 @@ const OnboardingScreen = ({ navigation }) => {
                 secureTextEntry
               />
 
+              {/* Phone */}
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="(555) 123-4567"
+                placeholderTextColor="rgba(26, 26, 46, 0.4)"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+              />
+
               {/* Location (dropdowns) - State first, then City */}
               <View style={styles.inputRow}>
                 <View style={styles.inputHalf}>
@@ -917,14 +918,18 @@ const OnboardingScreen = ({ navigation }) => {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={handleSignup} activeOpacity={0.8}>
+              <TouchableOpacity onPress={handleSignup} activeOpacity={0.8} disabled={isSubmitting}>
                 <LinearGradient
                   colors={['#00D4E5', '#00E5CC']}
                   style={styles.primaryButton}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
-                  <Text style={styles.primaryButtonText}>Continue</Text>
+                  {isSubmitting ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Continue</Text>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -949,7 +954,7 @@ const OnboardingScreen = ({ navigation }) => {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        scrollEnabled={!isDismissing && currentSlide !== 9}
+        scrollEnabled={false}
         onMomentumScrollEnd={onScrollEnd}
         style={styles.scrollView}
         keyboardShouldPersistTaps="handled"
@@ -959,8 +964,6 @@ const OnboardingScreen = ({ navigation }) => {
         {renderStep1Slide()}
         {renderStep2Slide()}
         {renderStep3Slide()}
-        {renderSocialProofSlide()}
-        {renderTutorialSlide()}
         {renderLocationSlide()}
         {renderNotificationsSlide()}
         {renderSignupSlide()}
@@ -968,13 +971,13 @@ const OnboardingScreen = ({ navigation }) => {
 
       {/* Progress Dots */}
       <View style={styles.dotsContainer}>
-        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((index) => (
+        {[0, 1, 2, 3, 4, 5, 6].map((index) => (
           <View key={index} style={[styles.dot, currentSlide === index && styles.activeDot]} />
         ))}
       </View>
 
-      {/* Skip Button (only on first 7 slides) */}
-      {currentSlide < 7 && (
+      {/* Skip Button (only on first 4 slides) */}
+      {currentSlide < 4 && (
         <TouchableOpacity onPress={skipToSignup} style={styles.skipTopButton}>
           <Text style={styles.skipTopButtonText}>Skip</Text>
         </TouchableOpacity>
@@ -1031,21 +1034,18 @@ const OnboardingScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
             <FlatList
-              data={cities.length > 0 ? [...cities, 'Other'] : ['Loading cities...', 'Other']}
+              data={[...cities, 'Other']}
               keyExtractor={(item, index) => `${item}-${index}`}
               keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => {
-                    if (item !== 'Loading cities...') {
-                      setCity(item);
-                      setIsCityPickerOpen(false);
-                    }
+                    setCity(item);
+                    setIsCityPickerOpen(false);
                   }}
-                  disabled={item === 'Loading cities...'}
                 >
-                  <Text style={[styles.modalItemText, item === 'Loading cities...' && { opacity: 0.5 }]}>
+                  <Text style={styles.modalItemText}>
                     {item}
                   </Text>
                 </TouchableOpacity>

@@ -33,20 +33,15 @@ export async function registerForPushNotificationsAsync() {
   }
 
   if (!Device.isDevice) {
-    alert('Must use physical device for Push Notifications');
+    console.log('📱 Must use physical device for Push Notifications');
     return null;
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
+  
+  // Only proceed if permission is already granted - don't request here
   if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== 'granted') {
-    alert('Failed to get push token for push notification!');
+    console.log('📱 Push notification permission not granted:', existingStatus);
     return null;
   }
 

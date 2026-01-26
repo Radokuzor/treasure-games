@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Linking from 'expo-linking';
+import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
 import { deleteUser, onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -25,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GradientBackground, GradientCard } from '../components/GradientComponents';
 import { getFirebaseAuth, getFirebaseDb, hasFirebaseConfig } from '../config/firebase';
 import { useTheme } from '../context/ThemeContext';
+import { registerForPushNotificationsAsync } from '../notificationService';
 
 const FRIENDS_DATA = [
   { id: '1', name: 'Sarah', avatar: '👩‍🦰', status: 'online' },
@@ -36,13 +40,14 @@ const FRIENDS_DATA = [
 const ProfileScreen = ({ navigation }) => {
   const { theme, currentTheme, changeTheme, allThemes } = useTheme();
   const insets = useSafeAreaInsets();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [locationEnabled, setLocationEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [locationEnabled, setLocationEnabled] = useState(false);
   const [showRedeemModal, setShowRedeemModal] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [socialMediaLink, setSocialMediaLink] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [uid, setUid] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [profile, setProfile] = useState({
     firstName: '',
     lastName: '',
@@ -116,6 +121,9 @@ const ProfileScreen = ({ navigation }) => {
         
         console.log('📊 Profile: Setting stats to:', newStats);
         setStats(newStats);
+
+        // Check if user is admin
+        setIsAdmin(data.isAdmin === true);
       },
       (error) => {
         console.log('Profile stats listener error:', error?.message ?? error);
@@ -124,6 +132,117 @@ const ProfileScreen = ({ navigation }) => {
 
     return () => unsubscribe();
   }, [uid]);
+
+  // Check actual permission status on mount
+  useEffect(() => {
+    const checkPermissions = async () => {
+      try {
+        // Check notification permission
+        const { status: notifStatus } = await Notifications.getPermissionsAsync();
+        setNotificationsEnabled(notifStatus === 'granted');
+        
+        // Check location permission
+        const { status: locStatus } = await Location.getForegroundPermissionsAsync();
+        setLocationEnabled(locStatus === 'granted');
+      } catch (error) {
+        console.log('Error checking permissions:', error?.message ?? error);
+      }
+    };
+    
+    checkPermissions();
+  }, []);
+
+  // Handle notification toggle
+  const handleNotificationToggle = async (value) => {
+    if (value) {
+      // User wants to enable notifications
+      const { status } = await Notifications.getPermissionsAsync();
+      
+      if (status === 'granted') {
+        setNotificationsEnabled(true);
+      } else if (status === 'undetermined') {
+        // Request permission
+        const { status: newStatus } = await Notifications.requestPermissionsAsync();
+        if (newStatus === 'granted') {
+          setNotificationsEnabled(true);
+          // Save push token to Firebase
+          try {
+            const pushToken = await registerForPushNotificationsAsync();
+            if (pushToken && uid) {
+              const db = getFirebaseDb();
+              if (db) {
+                await updateDoc(doc(db, 'users', uid), {
+                  pushToken,
+                  pushTokenUpdatedAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                });
+              }
+            }
+          } catch (e) {
+            console.log('Error saving push token:', e?.message ?? e);
+          }
+        } else {
+          setNotificationsEnabled(false);
+        }
+      } else {
+        // Permission was denied, open settings
+        Alert.alert(
+          'Notifications Disabled',
+          'To enable notifications, please go to Settings and allow notifications for Grab The Cash.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+      }
+    } else {
+      // User wants to disable - just update UI (can't revoke permission programmatically)
+      Alert.alert(
+        'Disable Notifications',
+        'To disable notifications, please go to Settings and turn off notifications for Grab The Cash.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+    }
+  };
+
+  // Handle location toggle
+  const handleLocationToggle = async (value) => {
+    if (value) {
+      // User wants to enable location
+      const { status } = await Location.getForegroundPermissionsAsync();
+      
+      if (status === 'granted') {
+        setLocationEnabled(true);
+      } else if (status === 'undetermined') {
+        // Request permission
+        const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
+        setLocationEnabled(newStatus === 'granted');
+      } else {
+        // Permission was denied, open settings
+        Alert.alert(
+          'Location Disabled',
+          'To enable location services, please go to Settings and allow location access for Grab The Cash.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+      }
+    } else {
+      // User wants to disable - just update UI (can't revoke permission programmatically)
+      Alert.alert(
+        'Disable Location',
+        'To disable location services, please go to Settings and turn off location access for Grab The Cash.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+    }
+  };
 
   const handleRedeem = async (method) => {
     if (isRedeeming) return;
@@ -465,7 +584,7 @@ const ProfileScreen = ({ navigation }) => {
             </View>
             <Switch
               value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
+              onValueChange={handleNotificationToggle}
               trackColor={{ false: '#3e3e3e', true: theme.gradients.accent[0] }}
               thumbColor="#FFFFFF"
             />
@@ -480,7 +599,7 @@ const ProfileScreen = ({ navigation }) => {
             </View>
             <Switch
               value={locationEnabled}
-              onValueChange={setLocationEnabled}
+              onValueChange={handleLocationToggle}
               trackColor={{ false: '#3e3e3e', true: theme.gradients.accent[0] }}
               thumbColor="#FFFFFF"
             />
@@ -498,19 +617,22 @@ const ProfileScreen = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={24} color={theme.colors.textSecondary} />
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.settingItem} 
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate('Admin')}
-          >
-            <View style={styles.settingLeft}>
-              <Ionicons name="shield-outline" size={24} color={theme.colors.warning} />
-              <Text style={[styles.settingText, { color: theme.colors.text }]}>
-                Admin Panel
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color={theme.colors.textSecondary} />
-          </TouchableOpacity>
+          {/* Admin Panel - Only visible to admins */}
+          {isAdmin && (
+            <TouchableOpacity 
+              style={styles.settingItem} 
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('Admin')}
+            >
+              <View style={styles.settingLeft}>
+                <Ionicons name="shield-outline" size={24} color={theme.colors.warning} />
+                <Text style={[styles.settingText, { color: theme.colors.text }]}>
+                  Admin Panel
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+          )}
         </GradientCard>
 
         <View style={styles.logoutContainer}>

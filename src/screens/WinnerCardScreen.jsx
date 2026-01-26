@@ -271,25 +271,16 @@ const WinnerCardScreen = ({
 
                 {/* Position/Score Info */}
                 <View style={styles.infoContainer}>
-                  {/* Show trophy and WINNER/CURRENT WINNER for cash winners */}
+                  {/* Show trophy and WINNER for cash winners */}
                   {isCashWinner && (
                     <View style={styles.winnerBadgeContainer}>
                       <Text style={styles.winnerTrophy}>🏆</Text>
-                      <Text style={styles.winnerLabel}>
-                        {isCompetitionActive && gameType === 'virtual' ? 'CURRENT WINNER!' : 'WINNER!'}
-                      </Text>
+                      <Text style={styles.winnerLabel}>WINNER!</Text>
                     </View>
                   )}
 
-                  {/* Show CURRENT WINNER for non-cash Battle Royale podium positions */}
-                  {!isCashWinner && isCompetitionActive && gameType === 'virtual' && isOnPodium && (
-                    <View style={styles.currentWinnerBadge}>
-                      <Text style={styles.currentWinnerText}>⏳ CURRENT {getPositionDisplay()}</Text>
-                    </View>
-                  )}
-
-                  {/* Show position badge if on podium (non-cash) - medals on both sides - only for completed games */}
-                  {!isCashWinner && isOnPodium && !(isCompetitionActive && gameType === 'virtual') && (
+                  {/* Show position badge if on podium (non-cash) - medals on both sides */}
+                  {!isCashWinner && isOnPodium && (
                     <View style={styles.positionBadge}>
                       <Text style={styles.positionText}>{getPositionDisplay()}</Text>
                     </View>
@@ -351,16 +342,6 @@ const WinnerCardScreen = ({
               </LinearGradient>
             </View>
           </ViewShot>
-
-          {/* Warning for active Battle Royale - position is temporary */}
-          {isCompetitionActive && gameType === 'virtual' && !wonMoney && (
-            <View style={styles.temporaryWarning}>
-              <Ionicons name="warning" size={20} color="#F59E0B" />
-              <Text style={styles.temporaryWarningText}>
-                ⏳ Your position is temporary! Someone can still beat your score. Keep playing to secure your win!
-              </Text>
-            </View>
-          )}
 
           {/* Notice - different for cash winners vs achievement */}
           <View style={[styles.confirmationNotice, isCashWinner && styles.cashNotice]}>
@@ -571,25 +552,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
     letterSpacing: 2,
   },
-  // Current winner badge for active Battle Royale
-  currentWinnerBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.9)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: '#FCD34D',
-  },
-  currentWinnerText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFF',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-    letterSpacing: 1,
-  },
   positionBadge: {
     alignItems: 'center',
     marginBottom: 4,
@@ -742,25 +704,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 3,
     borderRightWidth: 3,
     borderBottomRightRadius: 6,
-  },
-  // Temporary position warning for active Battle Royale
-  temporaryWarning: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 12,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.4)',
-  },
-  temporaryWarningText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#F59E0B',
-    lineHeight: 18,
   },
   // Confirmation notice
   confirmationNotice: {

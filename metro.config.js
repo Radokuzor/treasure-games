@@ -6,6 +6,7 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.sourceExts.push('cjs');
 config.resolver.assetExts.push('lottie');
+config.resolver.assetExts.push('html');
 
 // Add platform-specific extensions for web
 config.resolver.platforms = ['ios', 'android', 'web'];

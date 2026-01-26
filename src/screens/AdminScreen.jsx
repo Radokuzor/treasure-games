@@ -6,6 +6,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -34,6 +35,7 @@ import {
 } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { GradientBackground, GradientCard } from '../components/GradientComponents';
+import MiniGameWebView from '../components/MiniGameWebView';
 import { UnifiedCircle, UnifiedMapView, UnifiedMarker } from '../components/UnifiedMapView';
 import { getDb, hasFirebaseConfig } from '../config/firebase';
 import { useTheme } from '../context/ThemeContext';
@@ -97,8 +99,23 @@ const AdminScreen = ({ navigation }) => {
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [showDurationPicker, setShowDurationPicker] = useState(false);
 
+  // Tab navigation state
+  const [activeTab, setActiveTab] = useState('games'); // 'games', 'create', 'requests', 'players'
+  
+  // Players tab state
+  const [allUsers, setAllUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+
+  // Game testing state
+  const [testingGame, setTestingGame] = useState(null);
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [testPhase, setTestPhase] = useState('game'); // 'game', 'winner', 'podium'
+  const [testScore, setTestScore] = useState(0);
+
   // Duration options for dropdown
   const DURATION_OPTIONS = [
+    { label: '1 minute', value: '1' },
+    { label: '5 minutes', value: '5' },
     { label: '15 minutes', value: '15' },
     { label: '30 minutes', value: '30' },
     { label: '1 hour', value: '60' },
@@ -258,6 +275,33 @@ const AdminScreen = ({ navigation }) => {
       (error) => {
         console.log('Redemptions listener error:', error?.message ?? error);
         setLoadingRedemptions(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [isAuthenticated]);
+
+  // Load all users for Players tab
+  useEffect(() => {
+    if (!hasFirebaseConfig || !isAuthenticated) return;
+
+    const db = getDb();
+    if (!db) return;
+
+    const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(
+      usersQuery,
+      (snapshot) => {
+        const usersData = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }));
+        setAllUsers(usersData);
+        setLoadingUsers(false);
+      },
+      (error) => {
+        console.log('Users listener error:', error?.message ?? error);
+        setLoadingUsers(false);
       }
     );
 
@@ -603,20 +647,42 @@ const AdminScreen = ({ navigation }) => {
   };
 
   const sendExpoPushNotifications = async (messages) => {
-    const response = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(messages),
-    });
+    console.log('📤 Sending push notifications:', messages.length, 'messages');
+    console.log('📤 First token preview:', messages[0]?.to?.substring(0, 30) + '...');
+    
+    try {
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messages),
+      });
 
-    const json = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(json?.errors?.[0]?.message ?? `Expo push failed (${response.status})`);
+      const json = await response.json().catch(() => null);
+      console.log('📤 Expo push response:', JSON.stringify(json, null, 2));
+      
+      if (!response.ok) {
+        console.error('📤 Expo push failed:', response.status, json);
+        throw new Error(json?.errors?.[0]?.message ?? `Expo push failed (${response.status})`);
+      }
+      
+      // Check for individual ticket errors
+      if (json?.data) {
+        const errors = json.data.filter(ticket => ticket.status === 'error');
+        if (errors.length > 0) {
+          console.warn('📤 Some notifications failed:', errors);
+        }
+        const successes = json.data.filter(ticket => ticket.status === 'ok');
+        console.log(`📤 Notifications sent: ${successes.length} success, ${errors.length} failed`);
+      }
+      
+      return json;
+    } catch (error) {
+      console.error('📤 Push notification error:', error);
+      throw error;
     }
-    return json;
   };
 
   const chunk = (items, size) => {
@@ -995,6 +1061,27 @@ const AdminScreen = ({ navigation }) => {
               requiredScore: 70,
             };
             break;
+          case 'last_stand':
+            // Last Stand uses the competition duration as game time
+            // No additional config needed - game handles its own timing
+            gameData.virtualGame.config = {
+              gameTime: durationMs / 1000, // Convert to seconds for the game
+            };
+            break;
+          case 'tetris':
+            // Tetris uses the competition duration as game time
+            // No additional config needed - game handles its own timing
+            gameData.virtualGame.config = {
+              gameTime: durationMs / 1000, // Convert to seconds for the game
+            };
+            break;
+          case 'flappy_bird':
+            // Flappy Bird uses the competition duration as game time
+            // No additional config needed - game handles its own timing
+            gameData.virtualGame.config = {
+              gameTime: durationMs / 1000, // Convert to seconds for the game
+            };
+            break;
           case 'custom':
             // Custom game URL will be added after upload
             break;
@@ -1174,7 +1261,33 @@ const AdminScreen = ({ navigation }) => {
     }
   };
 
-  const handleLaunchGame = async (game) => {
+  // Handle testing a virtual game
+  const handleTestGame = (game) => {
+    if (game.type !== 'virtual') {
+      Alert.alert('Test Mode', 'Test mode is only available for virtual games.');
+      return;
+    }
+    setTestingGame(game);
+    setTestPhase('game');
+    setTestScore(0);
+    setShowTestModal(true);
+  };
+
+  // Handle test game completion
+  const handleTestGameComplete = (result) => {
+    console.log('🧪 Test game completed:', result);
+    const score = result?.score || result?.data?.score || Math.floor(Math.random() * 1000) + 100;
+    setTestScore(score);
+    setTestPhase('winner');
+  };
+
+  // Simulate different winner scenarios
+  const simulateWinnerScreen = (rank) => {
+    setTestScore(rank === 1 ? 1500 : rank === 2 ? 1200 : 800);
+    setTestPhase('winner');
+  };
+
+  const handleLaunchGame = async (game, silent = false) => {
     if (!hasFirebaseConfig) return;
 
     const db = getDb();
@@ -1185,101 +1298,144 @@ const AdminScreen = ({ navigation }) => {
       const isVirtualOrNoCity = game.type === 'virtual' || !game.city;
       const targetAudience = isVirtualOrNoCity ? 'all players' : `players in ${game.city}`;
 
-      Alert.alert(
-        'Launch Game?',
-        `Launch "${game.name}" and notify ${targetAudience}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Launch',
-            style: 'default',
-            onPress: async () => {
-              // Prepare update data
-              const updateData = {
-                status: 'live',
-                launchedAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              };
+      const launchGame = async () => {
+        // Prepare update data
+        const updateData = {
+          status: 'live',
+          launchedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          silentLaunch: silent, // Track if game was launched silently
+        };
 
-              // For virtual games, calculate and set the end time
-              if (game.type === 'virtual' && game.virtualGame?.duration) {
-                const durationMs = game.virtualGame.duration;
-                const endsAt = new Date(Date.now() + durationMs);
-                updateData['virtualGame.endsAt'] = endsAt;
-                console.log('⏱️ Virtual game will end at:', endsAt.toLocaleString());
+        // For virtual games, calculate and set the end time
+        if (game.type === 'virtual' && game.virtualGame?.duration) {
+          const durationMs = game.virtualGame.duration;
+          const endsAt = new Date(Date.now() + durationMs);
+          updateData['virtualGame.endsAt'] = endsAt;
+          console.log('⏱️ Virtual game will end at:', endsAt.toLocaleString());
+        }
+
+        await updateDoc(doc(db, 'games', game.id), updateData);
+
+        // If silent launch, skip notifications
+        if (silent) {
+          console.log('🔇 Silent launch - skipping notifications');
+          Alert.alert(
+            'Game Launched Silently!', 
+            `"${game.name}" is now live.\n\nNo notifications were sent to players.`
+          );
+          return;
+        }
+
+        // Get ALL users first, then filter
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        console.log('📊 Total users in database:', usersSnapshot.docs.length);
+        console.log('🔍 Game type:', game.type);
+        console.log('🔍 Game city:', game.city || 'none');
+
+        // Filter users based on game type and city
+        const tokens = usersSnapshot.docs
+          .map((docSnap) => {
+            const userData = docSnap.data();
+            const token = userData?.pushToken;
+            const userCity = userData?.city?.toLowerCase?.()?.trim?.() || '';
+            const gameCity = game.city?.toLowerCase?.()?.trim?.() || '';
+            
+            // Log each user for debugging
+            console.log(`User ${docSnap.id}:`, {
+              hasToken: !!token,
+              tokenPreview: token ? token.substring(0, 20) + '...' : 'none',
+              userCity: userCity || 'no city',
+              gameCity: gameCity || 'no city (all users)',
+            });
+
+            // For virtual games or games without city, include all users with tokens
+            if (isVirtualOrNoCity) {
+              return token;
+            }
+
+            // For location games with a city, match city (case-insensitive)
+            if (userCity && gameCity && userCity === gameCity) {
+              return token;
+            }
+
+            // Also include users without a city set (they should get all notifications)
+            if (!userCity && token) {
+              console.log(`  → Including user without city: ${docSnap.id}`);
+              return token;
+            }
+
+            return null;
+          })
+          .filter((token) => typeof token === 'string' && token.length > 0);
+
+        console.log('✅ Valid push tokens to notify:', tokens.length);
+
+        if (tokens.length > 0) {
+          try {
+            const notifications = tokens.map((token) => ({
+              to: token,
+              sound: 'default',
+              title: '🎮 Game is LIVE!',
+              body: `${game.name} is LIVE! Prize: $${game.prizeAmount || '0'}`,
+              data: { gameId: game.id, type: 'game_live' },
+            }));
+
+            console.log('🚀 Attempting to send', notifications.length, 'notifications');
+            
+            const batches = chunk(notifications, 100);
+            let totalSent = 0;
+            for (const batch of batches) {
+              const result = await sendExpoPushNotifications(batch);
+              if (result?.data) {
+                totalSent += result.data.filter(t => t.status === 'ok').length;
               }
+            }
 
-              await updateDoc(doc(db, 'games', game.id), updateData);
+            Alert.alert('Game Launched!', `Notified ${totalSent} of ${tokens.length} players.`);
+          } catch (notifError) {
+            console.error('❌ Notification sending failed:', notifError);
+            Alert.alert(
+              'Game Launched!', 
+              `Game is live but notifications failed to send.\n\nError: ${notifError?.message || 'Unknown error'}`
+            );
+          }
+        } else {
+          Alert.alert(
+            'Game Launched!', 
+            'No players to notify.\n\nThis could mean:\n• No users have push tokens\n• Users haven\'t enabled notifications\n• Check console logs for details'
+          );
+        }
+      };
 
-              // Get ALL users first, then filter
-              const usersSnapshot = await getDocs(collection(db, 'users'));
-              console.log('📊 Total users in database:', usersSnapshot.docs.length);
-              console.log('🔍 Game type:', game.type);
-              console.log('🔍 Game city:', game.city || 'none');
-
-              // Filter users based on game type and city
-              const tokens = usersSnapshot.docs
-                .map((docSnap) => {
-                  const userData = docSnap.data();
-                  const token = userData?.pushToken;
-                  const userCity = userData?.city?.toLowerCase?.()?.trim?.() || '';
-                  const gameCity = game.city?.toLowerCase?.()?.trim?.() || '';
-                  
-                  // Log each user for debugging
-                  console.log(`User ${docSnap.id}:`, {
-                    hasToken: !!token,
-                    tokenPreview: token ? token.substring(0, 20) + '...' : 'none',
-                    userCity: userCity || 'no city',
-                    gameCity: gameCity || 'no city (all users)',
-                  });
-
-                  // For virtual games or games without city, include all users with tokens
-                  if (isVirtualOrNoCity) {
-                    return token;
-                  }
-
-                  // For location games with a city, match city (case-insensitive)
-                  if (userCity && gameCity && userCity === gameCity) {
-                    return token;
-                  }
-
-                  // Also include users without a city set (they should get all notifications)
-                  if (!userCity && token) {
-                    console.log(`  → Including user without city: ${docSnap.id}`);
-                    return token;
-                  }
-
-                  return null;
-                })
-                .filter((token) => typeof token === 'string' && token.length > 0);
-
-              console.log('✅ Valid push tokens to notify:', tokens.length);
-
-              if (tokens.length > 0) {
-                const notifications = tokens.map((token) => ({
-                  to: token,
-                  sound: 'default',
-                  title: '🎮 Game is LIVE!',
-                  body: `${game.name} is LIVE! Prize: $${game.prizeAmount || '0'}`,
-                  data: { gameId: game.id, type: 'game_live' },
-                }));
-
-                const batches = chunk(notifications, 100);
-                for (const batch of batches) {
-                  await sendExpoPushNotifications(batch);
-                }
-
-                Alert.alert('Game Launched!', `Notified ${tokens.length} players.`);
-              } else {
-                Alert.alert(
-                  'Game Launched!', 
-                  'No players to notify.\n\nThis could mean:\n• No users have push tokens\n• Users haven\'t enabled notifications\n• Check console logs for details'
-                );
-              }
+      // For silent launches, show a different confirmation
+      if (silent) {
+        Alert.alert(
+          'Silent Launch?',
+          `Launch "${game.name}" WITHOUT notifying any players?\n\nThe game will be live but players won't receive push notifications.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Launch Silently',
+              style: 'default',
+              onPress: launchGame,
             },
-          },
-        ]
-      );
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Launch Game?',
+          `Launch "${game.name}" and notify ${targetAudience}?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Launch',
+              style: 'default',
+              onPress: launchGame,
+            },
+          ]
+        );
+      }
     } catch (error) {
       console.error('Launch game error:', error);
       Alert.alert('Error', error?.message ?? 'Failed to launch game.');
@@ -1385,19 +1541,138 @@ const AdminScreen = ({ navigation }) => {
     );
   }
 
+  // Render Tab Bar
+  const renderTabBar = () => (
+    <View style={styles.tabBar}>
+      {[
+        { key: 'games', label: 'Games', icon: 'game-controller' },
+        { key: 'create', label: 'Create', icon: 'add-circle' },
+        { key: 'requests', label: 'Requests', icon: 'gift' },
+        { key: 'players', label: 'Players', icon: 'people' },
+      ].map((tab) => (
+        <TouchableOpacity
+          key={tab.key}
+          onPress={() => setActiveTab(tab.key)}
+          style={[
+            styles.tabItem,
+            activeTab === tab.key && styles.tabItemActive,
+          ]}
+          activeOpacity={0.7}
+        >
+          {activeTab === tab.key ? (
+            <LinearGradient
+              colors={theme.gradients.primary}
+              style={styles.tabItemGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons name={tab.icon} size={18} color="#FFFFFF" />
+              <Text style={styles.tabTextActive}>{tab.label}</Text>
+              {tab.key === 'requests' && pendingRedemptions.length > 0 && (
+                <View style={styles.tabBadge}>
+                  <Text style={styles.tabBadgeText}>{pendingRedemptions.length}</Text>
+                </View>
+              )}
+            </LinearGradient>
+          ) : (
+            <View style={styles.tabItemInner}>
+              <Ionicons name={tab.icon + '-outline'} size={18} color={theme.colors.textSecondary} />
+              <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>{tab.label}</Text>
+              {tab.key === 'requests' && pendingRedemptions.length > 0 && (
+                <View style={[styles.tabBadge, { backgroundColor: '#EF4444' }]}>
+                  <Text style={styles.tabBadgeText}>{pendingRedemptions.length}</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  // Render Players Tab Content
+  const renderPlayersTab = () => (
+    <GradientCard style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: theme.colors.text, marginBottom: 16 }]}>
+        👥 All Players ({allUsers.length})
+      </Text>
+      
+      {loadingUsers ? (
+        <ActivityIndicator size="large" color={theme.colors.accent} />
+      ) : allUsers.length === 0 ? (
+        <Text style={[styles.helpText, { color: theme.colors.textSecondary }]}>
+          No users registered yet.
+        </Text>
+      ) : (
+        allUsers.map((user) => (
+          <View key={user.id} style={styles.playerRow}>
+            <View style={styles.playerAvatar}>
+              <Text style={styles.playerAvatarText}>
+                {(user.firstName?.[0] || user.email?.[0] || '?').toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.playerInfo}>
+              <Text style={[styles.playerName, { color: theme.colors.text }]}>
+                {user.firstName || ''} {user.lastName || ''}
+                {!user.firstName && !user.lastName && (user.email || 'Unknown User')}
+              </Text>
+              <Text style={[styles.playerEmail, { color: theme.colors.textSecondary }]}>
+                {user.email || 'No email'}
+              </Text>
+              <View style={styles.playerStats}>
+                <View style={styles.playerStat}>
+                  <Ionicons name="trophy" size={14} color="#FFD700" />
+                  <Text style={[styles.playerStatText, { color: theme.colors.textSecondary }]}>
+                    {user.totalWins || 0} wins
+                  </Text>
+                </View>
+                <View style={styles.playerStat}>
+                  <Ionicons name="cash" size={14} color="#10B981" />
+                  <Text style={[styles.playerStatText, { color: theme.colors.textSecondary }]}>
+                    ${(user.totalEarnings || 0).toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.playerStat}>
+                  <Ionicons name="wallet" size={14} color="#8B5CF6" />
+                  <Text style={[styles.playerStatText, { color: theme.colors.textSecondary }]}>
+                    ${(user.balance || 0).toFixed(2)} bal
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.playerMeta, { color: theme.colors.textSecondary }]}>
+                📍 {user.city || 'No city'} • 📱 {user.phone || 'No phone'}
+              </Text>
+            </View>
+          </View>
+        ))
+      )}
+    </GradientCard>
+  );
+
   return (
     <GradientBackground>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Sticky Header */}
+      <View style={styles.stickyHeader}>
         {/* Header */}
-	        <View style={styles.header}>
-	          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-	            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-	          </TouchableOpacity>
-	          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Admin Panel</Text>
-	          <View style={styles.placeholder} />
-	        </View>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Admin Panel</Text>
+          <View style={styles.placeholder} />
+        </View>
 
-        {/* Redemption Requests */}
+        {/* Tab Bar */}
+        {renderTabBar()}
+      </View>
+
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* Tab Content */}
+        
+        {/* Requests Tab */}
+        {activeTab === 'requests' && (
+          <>
+            {/* Redemption Requests */}
         <GradientCard style={styles.section}>
           <View style={styles.redemptionsHeader}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>🎁 Redemption Requests</Text>
@@ -1438,13 +1713,14 @@ const AdminScreen = ({ navigation }) => {
                   🏙️ {userInfo?.city || 'No city'}
                 </Text>
                 {redemption.socialMediaLink && (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     onPress={() => {
                       if (Platform.OS === 'web') {
                         window.open(redemption.socialMediaLink, '_blank');
                       } else {
-                        import('react-native').then(({ Linking }) => {
-                          Linking.openURL(redemption.socialMediaLink);
+                        Linking.openURL(redemption.socialMediaLink).catch((err) => {
+                          console.log('Error opening social link:', err);
+                          Alert.alert('Error', 'Could not open the link');
                         });
                       }
                     }}
@@ -1497,11 +1773,11 @@ const AdminScreen = ({ navigation }) => {
           })}
         </GradientCard>
 
-	        {/* Home Media Upload Button */}
-	        <View style={styles.mediaUploadButtonContainer}>
-	          <TouchableOpacity
-	            onPress={() => navigation.navigate('AdminMediaUpload')}
-	            activeOpacity={0.8}
+        {/* Home Media Upload Button */}
+        <View style={styles.mediaUploadButtonContainer}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('AdminMediaUpload')}
+            activeOpacity={0.8}
           >
             <LinearGradient
               colors={['#8B5CF6', '#7C3AED']}
@@ -1515,8 +1791,13 @@ const AdminScreen = ({ navigation }) => {
             </LinearGradient>
           </TouchableOpacity>
         </View>
+          </>
+        )}
 
-        {/* Game Type Selector */}
+        {/* Create Tab */}
+        {activeTab === 'create' && (
+          <>
+            {/* Game Type Selector */}
         <GradientCard style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>🎮 Game Type</Text>
           <View style={styles.gameTypeContainer}>
@@ -2181,6 +2462,78 @@ const AdminScreen = ({ navigation }) => {
                   )}
                 </TouchableOpacity>
 
+                {/* Last Stand Option */}
+                <TouchableOpacity
+                  style={styles.miniGameTypeOption}
+                  onPress={() => setVirtualGameType('last_stand')}
+                  activeOpacity={0.7}
+                >
+                  {virtualGameType === 'last_stand' ? (
+                    <LinearGradient
+                      colors={['#EF4444', '#DC2626']}
+                      style={styles.miniGameTypeCard}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={{ fontSize: 28 }}>☠️</Text>
+                      <Text style={styles.miniGameTypeText}>Last Stand</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                      <Text style={{ fontSize: 28, opacity: 0.5 }}>☠️</Text>
+                      <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>Last Stand</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Tetris Option */}
+                <TouchableOpacity
+                  style={styles.miniGameTypeOption}
+                  onPress={() => setVirtualGameType('tetris')}
+                  activeOpacity={0.7}
+                >
+                  {virtualGameType === 'tetris' ? (
+                    <LinearGradient
+                      colors={['#667EEA', '#764BA2']}
+                      style={styles.miniGameTypeCard}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={{ fontSize: 28 }}>🎮</Text>
+                      <Text style={styles.miniGameTypeText}>Tetris</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                      <Text style={{ fontSize: 28, opacity: 0.5 }}>🎮</Text>
+                      <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>Tetris</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Flappy Bird Option */}
+                <TouchableOpacity
+                  style={styles.miniGameTypeOption}
+                  onPress={() => setVirtualGameType('flappy_bird')}
+                  activeOpacity={0.7}
+                >
+                  {virtualGameType === 'flappy_bird' ? (
+                    <LinearGradient
+                      colors={['#FFD93D', '#F0C419']}
+                      style={styles.miniGameTypeCard}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={{ fontSize: 28 }}>🐦</Text>
+                      <Text style={[styles.miniGameTypeText, { color: '#1a1a2e' }]}>Flappy Bird</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={[styles.miniGameTypeCard, styles.inactiveCard]}>
+                      <Text style={{ fontSize: 28, opacity: 0.5 }}>🐦</Text>
+                      <Text style={[styles.miniGameTypeText, { color: theme.colors.textSecondary }]}>Flappy Bird</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
                 {/* Custom Upload Option */}
                 <TouchableOpacity
                   style={styles.miniGameTypeOption}
@@ -2650,20 +3003,25 @@ const AdminScreen = ({ navigation }) => {
             </LinearGradient>
           </TouchableOpacity>
         </View>
+          </>
+        )}
 
-        {/* Games List */}
-        <GradientCard style={styles.section}>
-          <View style={styles.gamesHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>🎯 All Games</Text>
-            <TouchableOpacity
-              onPress={checkNotificationStats}
-              style={styles.notificationStatsButton}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="notifications-outline" size={18} color={theme.colors.accent} />
-              <Text style={[styles.notificationStatsText, { color: theme.colors.accent }]}>Stats</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Games Tab */}
+        {activeTab === 'games' && (
+          <>
+            {/* Games List */}
+            <GradientCard style={styles.section}>
+              <View style={styles.gamesHeader}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>🎯 All Games</Text>
+                <TouchableOpacity
+                  onPress={checkNotificationStats}
+                  style={styles.notificationStatsButton}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="notifications-outline" size={18} color={theme.colors.accent} />
+                  <Text style={[styles.notificationStatsText, { color: theme.colors.accent }]}>Stats</Text>
+                </TouchableOpacity>
+              </View>
 
           {/* Status Filter */}
           <ScrollView
@@ -2766,21 +3124,56 @@ const AdminScreen = ({ navigation }) => {
                 {/* Game Control Buttons */}
                 <View style={styles.gameControlsContainer}>
                   {game.status === 'pending' && (
-                    <TouchableOpacity
-                      onPress={() => handleLaunchGame(game)}
-                      activeOpacity={0.7}
-                      style={styles.gameControlButton}
-                    >
-                      <LinearGradient
-                        colors={['#10B981', '#059669']}
-                        style={styles.gameControlGradient}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
+                    <>
+                      {/* Test button for virtual games */}
+                      {game.type === 'virtual' && (
+                        <TouchableOpacity
+                          onPress={() => handleTestGame(game)}
+                          activeOpacity={0.7}
+                          style={styles.gameControlButton}
+                        >
+                          <LinearGradient
+                            colors={['#6366F1', '#4F46E5']}
+                            style={styles.gameControlGradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                          >
+                            <Ionicons name="flask-outline" size={16} color="#FFFFFF" />
+                            <Text style={styles.gameControlText}>Test</Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        onPress={() => handleLaunchGame(game)}
+                        activeOpacity={0.7}
+                        style={styles.gameControlButton}
                       >
-                        <Ionicons name="rocket-outline" size={16} color="#FFFFFF" />
-                        <Text style={styles.gameControlText}>Start</Text>
-                      </LinearGradient>
-                    </TouchableOpacity>
+                        <LinearGradient
+                          colors={['#10B981', '#059669']}
+                          style={styles.gameControlGradient}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                        >
+                          <Ionicons name="rocket-outline" size={16} color="#FFFFFF" />
+                          <Text style={styles.gameControlText}>Start</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleLaunchGame(game, true)}
+                        activeOpacity={0.7}
+                        style={styles.gameControlButton}
+                      >
+                        <LinearGradient
+                          colors={['#6B7280', '#4B5563']}
+                          style={styles.gameControlGradient}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                        >
+                          <Ionicons name="volume-mute-outline" size={16} color="#FFFFFF" />
+                          <Text style={styles.gameControlText}>Silent</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </>
                   )}
 
                   {game.status === 'live' && (
@@ -2878,7 +3271,12 @@ const AdminScreen = ({ navigation }) => {
               </View>
             ))
           )}
-        </GradientCard>
+            </GradientCard>
+          </>
+        )}
+
+        {/* Players Tab */}
+        {activeTab === 'players' && renderPlayersTab()}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -2968,6 +3366,155 @@ const AdminScreen = ({ navigation }) => {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Game Test Modal - Winner Preview Only */}
+      <Modal
+        visible={showTestModal && testPhase !== 'game'}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowTestModal(false)}
+      >
+        <View style={styles.testModalContainer}>
+          {/* Test Modal Header */}
+          <View style={styles.testModalHeader}>
+            <TouchableOpacity
+              onPress={() => setShowTestModal(false)}
+              style={styles.testModalClose}
+            >
+              <Ionicons name="close" size={28} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.testModalTitle}>
+              🧪 Testing: {testingGame?.name || 'Game'}
+            </Text>
+            <View style={styles.testModalPhaseIndicator}>
+              <Text style={styles.testModalPhaseText}>
+                🏆 Winner Preview
+              </Text>
+            </View>
+          </View>
+
+          {/* Test Phase Selector */}
+          <View style={styles.testPhaseSelector}>
+            <TouchableOpacity
+              onPress={() => setTestPhase('game')}
+              style={[styles.testPhaseButton]}
+            >
+              <Text style={styles.testPhaseButtonText}>
+                🎮 Play Game
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => simulateWinnerScreen(1)}
+              style={[styles.testPhaseButton, testScore >= 1500 && styles.testPhaseButtonActive]}
+            >
+              <Text style={[styles.testPhaseButtonText, testScore >= 1500 && styles.testPhaseButtonTextActive]}>
+                🏆 1st Place
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => simulateWinnerScreen(2)}
+              style={[styles.testPhaseButton, testScore >= 1200 && testScore < 1500 && styles.testPhaseButtonActive]}
+            >
+              <Text style={[styles.testPhaseButtonText, testScore >= 1200 && testScore < 1500 && styles.testPhaseButtonTextActive]}>
+                🥈 2nd Place
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => simulateWinnerScreen(3)}
+              style={[styles.testPhaseButton, testScore < 1200 && testScore > 0 && styles.testPhaseButtonActive]}
+            >
+              <Text style={[styles.testPhaseButtonText, testScore < 1200 && testScore > 0 && styles.testPhaseButtonTextActive]}>
+                🥉 3rd Place
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Winner Preview Content */}
+          <View style={styles.testModalContent}>
+            <View style={styles.testWinnerPreview}>
+              <LinearGradient
+                colors={['#1a1a2e', '#16213e', '#0f3460']}
+                style={styles.testWinnerCard}
+              >
+                <Text style={styles.testWinnerEmoji}>🎉</Text>
+                <Text style={styles.testWinnerTitle}>
+                  {testScore >= 1500 ? '🏆 1ST PLACE!' : testScore >= 1200 ? '🥈 2ND PLACE!' : '🥉 3RD PLACE!'}
+                </Text>
+                <Text style={styles.testWinnerScore}>Score: {testScore}</Text>
+                <Text style={styles.testWinnerPrize}>
+                  Prize: ${testingGame?.prizeAmount ? (
+                    testScore >= 1500 
+                      ? testingGame.prizeAmount 
+                      : testScore >= 1200 
+                        ? (testingGame.prizeAmount * 0.6).toFixed(2)
+                        : (testingGame.prizeAmount * 0.3).toFixed(2)
+                  ) : '10.00'}
+                </Text>
+                
+                <View style={styles.testWinnerInfo}>
+                  <Text style={styles.testWinnerInfoText}>
+                    This is a preview of what winners will see.
+                  </Text>
+                  <Text style={styles.testWinnerInfoText}>
+                    The actual winner card includes:
+                  </Text>
+                  <Text style={styles.testWinnerInfoItem}>• Player name and avatar</Text>
+                  <Text style={styles.testWinnerInfoItem}>• Game name and sponsor</Text>
+                  <Text style={styles.testWinnerInfoItem}>• Share buttons for social media</Text>
+                  <Text style={styles.testWinnerInfoItem}>• Confetti animation</Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => setTestPhase('game')}
+                  style={styles.testPlayAgainButton}
+                >
+                  <Text style={styles.testPlayAgainText}>🔄 Play Game</Text>
+                </TouchableOpacity>
+              </LinearGradient>
+            </View>
+          </View>
+
+          {/* Close Test Button */}
+          <TouchableOpacity
+            onPress={() => setShowTestModal(false)}
+            style={styles.testModalCloseButton}
+          >
+            <LinearGradient
+              colors={['#EF4444', '#DC2626']}
+              style={styles.testModalCloseGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons name="close-circle" size={20} color="#FFFFFF" />
+              <Text style={styles.testModalCloseText}>End Test</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* MiniGameWebView - Rendered outside of any modal to avoid nested modal issues */}
+      {showTestModal && testPhase === 'game' && testingGame && (
+        <MiniGameWebView
+          visible={true}
+          gameType={testingGame.virtualGame?.type || 'tap_count'}
+          gameConfig={{
+            targetTaps: testingGame.virtualGame?.config?.targetTaps || 100,
+            timeLimit: testingGame.virtualGame?.config?.timeLimit || 30,
+            holdDuration: testingGame.virtualGame?.config?.holdDuration || 5000,
+            bpm: testingGame.virtualGame?.config?.bpm || 120,
+            requiredBeats: testingGame.virtualGame?.config?.requiredBeats || 10,
+            toleranceMs: testingGame.virtualGame?.config?.toleranceMs || 150,
+          }}
+          customGameUrl={testingGame.virtualGame?.customGameUrl}
+          timeRemaining={testingGame.virtualGame?.config?.timeLimit ? testingGame.virtualGame.config.timeLimit * 1000 : 30000}
+          competitorCount={Math.floor(Math.random() * 50) + 10}
+          onComplete={handleTestGameComplete}
+          onClose={() => {
+            setTestPhase('winner');
+            setTestScore(Math.floor(Math.random() * 1000) + 500);
+          }}
+        />
+      )}
     </GradientBackground>
   );
 };
@@ -2976,13 +3523,271 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  stickyHeader: {
+    backgroundColor: 'transparent',
+    zIndex: 100,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 60,
-    paddingBottom: 16,
+    paddingBottom: 8,
+  },
+  // Tab Bar Styles
+  tabBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  tabItem: {
+    flex: 1,
+  },
+  tabItemActive: {},
+  tabItemGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    gap: 6,
+  },
+  tabItemInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    gap: 6,
+  },
+  tabText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  tabBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#8B5CF6',
+  },
+  // Test Modal Styles
+  testModalContainer: {
+    flex: 1,
+    backgroundColor: '#0f0f23',
+  },
+  testModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 60,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  testModalClose: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  testModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    flex: 1,
+    textAlign: 'center',
+  },
+  testModalPhaseIndicator: {
+    backgroundColor: 'rgba(139, 92, 246, 0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  testModalPhaseText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  testPhaseSelector: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  testPhaseButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+  },
+  testPhaseButtonActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.4)',
+  },
+  testPhaseButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  testPhaseButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  testModalContent: {
+    flex: 1,
+  },
+  testWinnerPreview: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'center',
+  },
+  testWinnerCard: {
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+  },
+  testWinnerEmoji: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  testWinnerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFD700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  testWinnerScore: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  testWinnerPrize: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#10B981',
+    marginBottom: 24,
+  },
+  testWinnerInfo: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    padding: 16,
+    width: '100%',
+    marginBottom: 20,
+  },
+  testWinnerInfoText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  testWinnerInfoItem: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginBottom: 4,
+    paddingLeft: 8,
+  },
+  testPlayAgainButton: {
+    backgroundColor: 'rgba(139, 92, 246, 0.3)',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 20,
+  },
+  testPlayAgainText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  testModalCloseButton: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  testModalCloseGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+    gap: 8,
+  },
+  testModalCloseText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  // Player Tab Styles
+  playerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  playerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(139, 92, 246, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  playerAvatarText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#8B5CF6',
+  },
+  playerInfo: {
+    flex: 1,
+  },
+  playerName: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  playerEmail: {
+    fontSize: 13,
+    marginBottom: 6,
+  },
+  playerStats: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 4,
+  },
+  playerStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  playerStatText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  playerMeta: {
+    fontSize: 12,
   },
   backButton: {
     width: 40,

@@ -1,16 +1,18 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Asset } from 'expo-asset';
+import * as FileSystem from 'expo-file-system/legacy';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  Text,
   ActivityIndicator,
-  Platform,
   Dimensions,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 
 // Conditionally import WebView for native - with error handling for Expo Go
 let WebView = null;
@@ -25,6 +27,13 @@ if (Platform.OS !== 'web') {
     webViewAvailable = false;
   }
 }
+
+// Asset-based game HTML files
+const ASSET_GAMES = {
+  last_stand: require('../../assets/games/last-stand.html'),
+  tetris: require('../../assets/games/tetris.html'),
+  flappy_bird: require('../../assets/games/flappy-bird.html'),
+};
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -95,7 +104,7 @@ const TAP_COUNT_HTML = `<!DOCTYPE html>
     let taps = 0, timeRemaining = timeLimit, gameStarted = false, gameEnded = false, timerInterval = null, startTime = null;
     const tapButton = document.getElementById('tapButton'), tapCountEl = document.getElementById('tapCount'), timerEl = document.getElementById('timer'), progressBar = document.getElementById('progressBar'), targetDisplay = document.getElementById('targetDisplay'), resultOverlay = document.getElementById('resultOverlay'), resultIcon = document.getElementById('resultIcon'), resultTitle = document.getElementById('resultTitle'), resultSubtitle = document.getElementById('resultSubtitle'), countdownOverlay = document.getElementById('countdownOverlay'), countdownNumber = document.getElementById('countdownNumber');
     targetDisplay.textContent = targetTaps; timerEl.textContent = timeLimit;
-    function startCountdown() { let count = 3; countdownNumber.textContent = count; const countdownInterval = setInterval(() => { count--; if (count > 0) { countdownNumber.textContent = count; countdownNumber.style.animation = 'none'; countdownNumber.offsetHeight; countdownNumber.style.animation = 'countdownPulse 1s ease-in-out'; } else if (count === 0) { countdownNumber.textContent = 'GO!'; countdownNumber.style.color = '#10B981'; } else { clearInterval(countdownInterval); countdownOverlay.classList.add('hidden'); startGame(); } }, 1000); }
+    function startCountdown() { let count = 3; countdownNumber.textContent = count; const countdownInterval = setInterval(() => { count--; if (count >= 1) { countdownNumber.textContent = count; countdownNumber.style.animation = 'none'; countdownNumber.offsetHeight; countdownNumber.style.animation = 'countdownPulse 1s ease-in-out'; } else if (count === 0) { countdownNumber.textContent = 'GO!'; countdownNumber.style.color = '#10B981'; countdownNumber.style.animation = 'none'; countdownNumber.offsetHeight; countdownNumber.style.animation = 'countdownPulse 1s ease-in-out'; } else { clearInterval(countdownInterval); countdownOverlay.classList.add('hidden'); startGame(); } }, 1000); }
     function startGame() { gameStarted = true; startTime = Date.now(); timerInterval = setInterval(() => { timeRemaining--; timerEl.textContent = timeRemaining; if (timeRemaining <= 5) timerEl.style.color = '#EF4444'; if (timeRemaining <= 0) endGame(false); }, 1000); }
     function handleTap(e) { e.preventDefault(); if (!gameStarted || gameEnded) return; taps++; tapCountEl.textContent = taps; const progress = Math.min((taps / targetTaps) * 100, 100); progressBar.style.width = progress + '%'; const ripple = document.createElement('div'); ripple.className = 'tap-ripple'; tapButton.appendChild(ripple); setTimeout(() => ripple.remove(), 400); if (navigator.vibrate) navigator.vibrate(10); if (taps >= targetTaps) endGame(true); }
     function endGame(success) { if (gameEnded) return; gameEnded = true; clearInterval(timerInterval); tapButton.classList.add('disabled'); const endTime = Date.now(), totalTimeMs = endTime - startTime; if (success) { resultOverlay.classList.add('success'); resultIcon.textContent = '🎉'; resultTitle.textContent = 'You Won!'; resultSubtitle.textContent = taps + ' taps in ' + (totalTimeMs / 1000).toFixed(1) + 's'; } else { resultOverlay.classList.add('failure'); resultIcon.textContent = '⏰'; resultTitle.textContent = "Time's Up!"; resultSubtitle.textContent = 'You got ' + taps + ' of ' + targetTaps + ' taps'; } resultOverlay.classList.add('show'); const result = { type: 'complete', success: success, data: { taps: taps, targetTaps: targetTaps, timeMs: totalTimeMs, timeLimit: timeLimit } }; if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(result)); window.parent.postMessage(result, '*'); }
@@ -176,7 +185,7 @@ const HOLD_DURATION_HTML = `<!DOCTYPE html>
     const holdButton = document.getElementById('holdButton'), timerDisplay = document.getElementById('timerDisplay'), progressRing = document.getElementById('progressRing'), targetDisplay = document.getElementById('targetDisplay'), instruction = document.getElementById('instruction'), resultOverlay = document.getElementById('resultOverlay'), resultIcon = document.getElementById('resultIcon'), resultTitle = document.getElementById('resultTitle'), resultSubtitle = document.getElementById('resultSubtitle'), countdownOverlay = document.getElementById('countdownOverlay'), countdownNumber = document.getElementById('countdownNumber');
     const CIRCUMFERENCE = 2 * Math.PI * 100;
     targetDisplay.textContent = holdDurationSeconds;
-    function startCountdown() { let count = 3; countdownNumber.textContent = count; const countdownInterval = setInterval(() => { count--; if (count > 0) { countdownNumber.textContent = count; countdownNumber.style.animation = 'none'; countdownNumber.offsetHeight; countdownNumber.style.animation = 'countdownPulse 1s ease-in-out'; } else if (count === 0) { countdownNumber.textContent = 'GO!'; countdownNumber.style.color = '#8B5CF6'; } else { clearInterval(countdownInterval); countdownOverlay.classList.add('hidden'); gameStarted = true; } }, 1000); }
+    function startCountdown() { let count = 3; countdownNumber.textContent = count; const countdownInterval = setInterval(() => { count--; if (count >= 1) { countdownNumber.textContent = count; countdownNumber.style.animation = 'none'; countdownNumber.offsetHeight; countdownNumber.style.animation = 'countdownPulse 1s ease-in-out'; } else if (count === 0) { countdownNumber.textContent = 'GO!'; countdownNumber.style.color = '#8B5CF6'; countdownNumber.style.animation = 'none'; countdownNumber.offsetHeight; countdownNumber.style.animation = 'countdownPulse 1s ease-in-out'; } else { clearInterval(countdownInterval); countdownOverlay.classList.add('hidden'); gameStarted = true; } }, 1000); }
     function updateProgress(progress) { const offset = CIRCUMFERENCE - (progress * CIRCUMFERENCE); progressRing.style.strokeDashoffset = offset; }
     function updateHoldTime() { if (!isHolding || gameEnded) return; currentHoldTime = Date.now() - holdStartTime; const seconds = currentHoldTime / 1000; const progress = Math.min(currentHoldTime / holdDuration, 1); timerDisplay.textContent = seconds.toFixed(1) + 's'; updateProgress(progress); if (progress >= 0.8) { instruction.textContent = 'Almost there! Keep holding!'; instruction.classList.add('warning'); } else if (progress >= 0.5) { instruction.textContent = 'Halfway there!'; instruction.classList.remove('warning'); } if (currentHoldTime >= holdDuration) { endGame(true); return; } animationFrame = requestAnimationFrame(updateHoldTime); }
     function startHold(e) { e.preventDefault(); if (!gameStarted || gameEnded || isHolding) return; isHolding = true; holdStartTime = Date.now(); holdButton.classList.add('holding'); instruction.textContent = 'Keep holding...'; instruction.classList.remove('warning'); if (navigator.vibrate) navigator.vibrate(20); updateHoldTime(); }
@@ -284,7 +293,7 @@ const RHYTHM_TAP_HTML = `<!DOCTYPE html>
     function handleMiss() { misses++; combo = 0; showFeedback('miss'); if (navigator.vibrate) navigator.vibrate([30, 30, 30]); updateDisplay(); }
     function updateDisplay() { scoreDisplay.textContent = Math.round(score); comboDisplay.textContent = combo; beatsDisplay.textContent = beatsHit + '/' + requiredBeats; }
     function startBeats() { totalBeats = 0; function generateBeat() { if (gameEnded) return; totalBeats++; createBeatDot(); if (totalBeats >= requiredBeats) { setTimeout(() => { endGame(); }, beatInterval * 2.5); return; } beatTimer = setTimeout(generateBeat, beatInterval); } setTimeout(generateBeat, beatInterval); }
-    function startCountdown() { let count = 3; countdownNumber.textContent = count; const countdownInterval = setInterval(() => { count--; if (count > 0) { countdownNumber.textContent = count; countdownNumber.style.animation = 'none'; countdownNumber.offsetHeight; countdownNumber.style.animation = 'countdownPulse 1s ease-in-out'; } else if (count === 0) { countdownNumber.textContent = 'GO!'; countdownNumber.style.color = '#EC4899'; } else { clearInterval(countdownInterval); countdownOverlay.classList.add('hidden'); gameStarted = true; startBeats(); } }, 1000); }
+    function startCountdown() { let count = 3; countdownNumber.textContent = count; const countdownInterval = setInterval(() => { count--; if (count >= 1) { countdownNumber.textContent = count; countdownNumber.style.animation = 'none'; countdownNumber.offsetHeight; countdownNumber.style.animation = 'countdownPulse 1s ease-in-out'; } else if (count === 0) { countdownNumber.textContent = 'GO!'; countdownNumber.style.color = '#EC4899'; countdownNumber.style.animation = 'none'; countdownNumber.offsetHeight; countdownNumber.style.animation = 'countdownPulse 1s ease-in-out'; } else { clearInterval(countdownInterval); countdownOverlay.classList.add('hidden'); gameStarted = true; startBeats(); } }, 1000); }
     function endGame() { if (gameEnded) return; gameEnded = true; clearTimeout(beatTimer); tapButton.classList.add('disabled'); const maxPossibleScore = requiredBeats * 100 * 1.5; const scorePercent = Math.round((score / maxPossibleScore) * 100); const hitPercent = Math.round((beatsHit / requiredBeats) * 100); const success = hitPercent >= requiredScore; if (success) { resultOverlay.classList.add('success'); resultIcon.textContent = '🎉'; resultTitle.textContent = 'You Won!'; resultSubtitle.textContent = hitPercent + '% accuracy!'; } else { resultOverlay.classList.add('failure'); resultIcon.textContent = '🎵'; resultTitle.textContent = 'Not Quite!'; resultSubtitle.textContent = hitPercent + '% accuracy (need ' + requiredScore + '%)'; } resultStats.textContent = 'Perfect: ' + perfectHits + ' | Good: ' + goodHits + ' | Miss: ' + misses + ' | Max Combo: ' + maxCombo; resultOverlay.classList.add('show'); const result = { type: 'complete', success: success, data: { score: Math.round(score), beatsHit: beatsHit, totalBeats: requiredBeats, perfectHits: perfectHits, goodHits: goodHits, misses: misses, maxCombo: maxCombo, accuracy: hitPercent } }; if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(result)); window.parent.postMessage(result, '*'); }
     tapButton.addEventListener('touchstart', handleTap, { passive: false }); tapButton.addEventListener('mousedown', handleTap);
     document.addEventListener('touchend', (e) => { e.preventDefault(); }, { passive: false });
@@ -309,6 +318,10 @@ const getEmbeddedGameHtml = (gameType, config = {}) => {
     case 'rhythm_tap':
       html = RHYTHM_TAP_HTML;
       break;
+    case 'last_stand':
+    case 'tetris':
+      // These are loaded from assets asynchronously
+      return null;
     default:
       return null;
   }
@@ -341,13 +354,18 @@ const getEmbeddedGameHtml = (gameType, config = {}) => {
   return html;
 };
 
+// Check if game type requires async asset loading
+const isAssetGame = (gameType) => {
+  return gameType === 'last_stand' || gameType === 'tetris' || gameType === 'flappy_bird';
+};
+
 /**
  * MiniGameWebView - Cross-platform component for rendering mini-games
  * 
  * Props:
  * - visible: boolean - Whether the modal is visible
  * - gameUrl: string - URL to custom HTML game (Firebase Storage URL) - optional
- * - gameType: string - Preset game type ('tap_count', 'hold_duration', 'rhythm_tap') - used if no gameUrl
+ * - gameType: string - Preset game type ('tap_count', 'hold_duration', 'rhythm_tap', 'last_stand', 'tetris') - used if no gameUrl
  * - gameConfig: object - Configuration to pass to the game
  * - onComplete: (success: boolean, data: object) => void - Called when game completes
  * - onClose: () => void - Called when user closes the modal
@@ -362,13 +380,70 @@ export default function MiniGameWebView({
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [assetHtml, setAssetHtml] = useState(null);
   const webViewRef = useRef(null);
   const iframeRef = useRef(null);
 
+  // Log config when it changes
+  useEffect(() => {
+    if (visible) {
+      console.log('🎮 MiniGameWebView config:', { gameType, gameConfig, visible });
+    }
+  }, [visible, gameType, gameConfig]);
+
   // Determine if we're using a custom URL or embedded HTML
   const useCustomUrl = !!gameUrl;
+
+  // Load asset-based games (Last Stand, Tetris, Flappy Bird)
+  useEffect(() => {
+    const loadAssetGame = async () => {
+      if (!visible || useCustomUrl || !isAssetGame(gameType)) {
+        setAssetHtml(null);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        console.log(`🎮 Loading asset game: ${gameType}`);
+        
+        const assetModule = ASSET_GAMES[gameType];
+        if (!assetModule) {
+          console.error('Asset game not found:', gameType);
+          setError('Game not found');
+          setLoading(false);
+          return;
+        }
+
+        // Load the asset
+        const asset = Asset.fromModule(assetModule);
+        await asset.downloadAsync();
+        
+        if (!asset.localUri) {
+          console.error('Asset localUri is null for:', gameType);
+          setError('Failed to load game asset');
+          setLoading(false);
+          return;
+        }
+        
+        // Read the HTML content
+        const htmlContent = await FileSystem.readAsStringAsync(asset.localUri);
+        console.log(`🎮 Loaded ${gameType} HTML (${htmlContent.length} chars)`);
+        
+        setAssetHtml(htmlContent);
+        setError(null);
+        // Note: loading will be set to false by WebView's onLoadEnd
+      } catch (err) {
+        console.error('Error loading asset game:', err);
+        setError('Failed to load game');
+        setLoading(false);
+      }
+    };
+
+    loadAssetGame();
+  }, [visible, gameType, useCustomUrl]);
   
-  // Get the HTML content (either from URL or embedded)
+  // Get the HTML content (either from URL, asset, or embedded)
   const getHtmlSource = () => {
     if (useCustomUrl) {
       // Build URL with config params for custom games
@@ -384,6 +459,12 @@ export default function MiniGameWebView({
         console.error('Invalid game URL:', gameUrl);
         return { uri: gameUrl };
       }
+    } else if (isAssetGame(gameType)) {
+      // Use asset-loaded HTML
+      if (assetHtml) {
+        return { html: assetHtml };
+      }
+      return null; // Still loading
     } else {
       // Use embedded HTML
       const html = getEmbeddedGameHtml(gameType, gameConfig);
@@ -405,9 +486,21 @@ export default function MiniGameWebView({
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         
+        // Handle both 'complete' (preset games) and 'gameComplete' (custom games like tetris, last-stand)
         if (data?.type === 'complete') {
           console.log('🎮 Mini-game completed (web):', data);
           onComplete?.(data.success, data.data);
+        } else if (data?.type === 'gameComplete') {
+          // Custom games send score directly - treat any score > 0 as success
+          console.log('🎮 Custom game completed (web):', data);
+          const success = (data.score || 0) > 0;
+          onComplete?.(success, { 
+            score: data.score || 0, 
+            wave: data.wave, 
+            kills: data.kills,
+            lines: data.lines,
+            level: data.level 
+          });
         }
       } catch (err) {
         // Ignore non-JSON messages from other sources
@@ -420,15 +513,31 @@ export default function MiniGameWebView({
 
   // Handle messages from WebView (native)
   const handleWebViewMessage = (event) => {
+    console.log('🎮 WebView message received (raw):', event.nativeEvent.data);
     try {
       const data = JSON.parse(event.nativeEvent.data);
+      console.log('🎮 WebView message parsed:', data);
       
+      // Handle both 'complete' (preset games) and 'gameComplete' (custom games like tetris, last-stand)
       if (data?.type === 'complete') {
         console.log('🎮 Mini-game completed (native):', data);
         onComplete?.(data.success, data.data);
+      } else if (data?.type === 'gameComplete') {
+        // Custom games send score directly - treat any score > 0 as success
+        console.log('🎮 Custom game completed (native):', data);
+        const success = (data.score || 0) > 0;
+        onComplete?.(success, { 
+          score: data.score || 0, 
+          wave: data.wave, 
+          kills: data.kills,
+          lines: data.lines,
+          level: data.level 
+        });
+      } else {
+        console.log('🎮 Unknown message type:', data?.type);
       }
     } catch (err) {
-      console.error('Error parsing WebView message:', err);
+      console.error('Error parsing WebView message:', err, 'Raw data:', event.nativeEvent.data);
     }
   };
 
@@ -442,6 +551,12 @@ export default function MiniGameWebView({
         return 'Hold Challenge';
       case 'rhythm_tap':
         return 'Rhythm Challenge';
+      case 'last_stand':
+        return 'Last Stand';
+      case 'tetris':
+        return 'Tetris Battle';
+      case 'flappy_bird':
+        return 'Flappy Bird';
       default:
         return 'Challenge';
     }
@@ -508,7 +623,7 @@ export default function MiniGameWebView({
             </View>
 
             <View style={styles.gameContainer}>
-              {loading && (
+              {(loading || !htmlSource) && !error && (
                 <View style={styles.loadingOverlay}>
                   <ActivityIndicator size="large" color="#10B981" />
                   <Text style={styles.loadingText}>Loading game...</Text>
@@ -526,7 +641,7 @@ export default function MiniGameWebView({
                     <Text style={styles.retryButtonText}>Retry</Text>
                   </TouchableOpacity>
                 </View>
-              ) : useCustomUrl ? (
+              ) : htmlSource && useCustomUrl ? (
                 <iframe
                   ref={iframeRef}
                   src={htmlSource.uri}
@@ -544,7 +659,7 @@ export default function MiniGameWebView({
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
                   sandbox="allow-scripts allow-same-origin"
                 />
-              ) : (
+              ) : htmlSource ? (
                 <iframe
                   ref={iframeRef}
                   srcDoc={htmlSource.html}
@@ -554,7 +669,17 @@ export default function MiniGameWebView({
                     border: 'none',
                     borderRadius: 16,
                   }}
-                  onLoad={() => setLoading(false)}
+                  onLoad={() => {
+                    setLoading(false);
+                    // Send init message with game config (including remaining time)
+                    const initMessage = JSON.stringify({
+                      type: 'init',
+                      remainingTime: gameConfig.remainingTime || gameConfig.gameTime || 900,
+                      ...gameConfig,
+                    });
+                    iframeRef.current?.contentWindow?.postMessage(initMessage, '*');
+                    console.log('🎮 Sent init message to game (web):', initMessage);
+                  }}
                   onError={() => {
                     setLoading(false);
                     setError('Failed to load game');
@@ -562,7 +687,7 @@ export default function MiniGameWebView({
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
                   sandbox="allow-scripts allow-same-origin"
                 />
-              )}
+              ) : null}
             </View>
           </View>
         </View>
@@ -590,7 +715,7 @@ export default function MiniGameWebView({
         </View>
 
         <View style={styles.webViewContainer}>
-          {loading && (
+          {(loading || !htmlSource) && !error && (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color="#10B981" />
               <Text style={styles.loadingText}>Loading game...</Text>
@@ -609,13 +734,49 @@ export default function MiniGameWebView({
                 <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
             </View>
-          ) : (
+          ) : htmlSource ? (
             <WebView
               ref={webViewRef}
               source={htmlSource}
               style={styles.webView}
               onLoadStart={() => setLoading(true)}
-              onLoadEnd={() => setLoading(false)}
+              onLoadEnd={() => {
+                setLoading(false);
+                // Send init message with game config (including remaining time)
+                const initData = {
+                  type: 'init',
+                  remainingTime: gameConfig.remainingTime || gameConfig.gameTime || 900,
+                  ...gameConfig,
+                };
+                const initMessage = JSON.stringify(initData);
+                
+                console.log('🎮 Sending init to game:', initData);
+                
+                // Small delay to ensure game JS is fully initialized
+                setTimeout(() => {
+                  // Use both postMessage and injectedJavaScript for reliability
+                  webViewRef.current?.postMessage(initMessage);
+                  
+                  // Inject JavaScript to directly call the init handler
+                  webViewRef.current?.injectJavaScript(`
+                    (function() {
+                      try {
+                        var initData = JSON.parse('${initMessage.replace(/'/g, "\\'")}');
+                        console.log('🎮 Game received injected init:', initData);
+                        if (typeof window.handleInitMessage === 'function') {
+                          window.handleInitMessage(initData);
+                        } else {
+                          // Fallback: dispatch message event
+                          window.postMessage(JSON.stringify(initData), '*');
+                        }
+                      } catch(e) { 
+                        console.log('Init inject error:', e); 
+                      }
+                    })();
+                    true;
+                  `);
+                }, 100);
+              }}
               onError={(syntheticEvent) => {
                 const { nativeEvent } = syntheticEvent;
                 console.error('WebView error:', nativeEvent);
@@ -635,7 +796,7 @@ export default function MiniGameWebView({
               showsVerticalScrollIndicator={false}
               originWhitelist={['*']}
             />
-          )}
+          ) : null}
         </View>
       </LinearGradient>
     </Modal>

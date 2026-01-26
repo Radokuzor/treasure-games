@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
+import { registerForPushNotificationsAsync } from '../notificationService';
+
+const PERMISSION_CARD_DISMISSED_KEY = 'permissionCardDismissedForever_v1';
 
 // Import unified map components
 import { UnifiedCallout, UnifiedMapView, UnifiedMarker } from '../components/UnifiedMapView';
@@ -25,7 +32,7 @@ if (Platform.OS !== 'web') {
 }
 
 import { getAuth } from 'firebase/auth';
-import { addDoc, collection, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
+import { addDoc, collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GradientBackground, GradientCard } from '../components/GradientComponents';
 import { getFirebaseDb } from '../config/firebase';
@@ -89,6 +96,172 @@ const CommunityScreen = () => {
   const [loadingGames, setLoadingGames] = useState(true);
   const mapRef = useRef(null);
   const didCenterMapRef = useRef(false);
+
+  // Permission reminder card state
+  const [showPermissionCard, setShowPermissionCard] = useState(false);
+  const [notificationGranted, setNotificationGranted] = useState(true);
+  const [locationGranted, setLocationGranted] = useState(true);
+  const permissionCardAnim = useRef(new Animated.Value(0)).current;
+
+  // Check permissions and show reminder card if needed
+  useEffect(() => {
+    const checkPermissionsForCard = async () => {
+      try {
+        console.log('🔔 Permission card: Starting check...');
+        
+        // Check if user permanently dismissed the card
+        const dismissed = await AsyncStorage.getItem(PERMISSION_CARD_DISMISSED_KEY);
+        console.log('🔔 Permission card: Dismissed flag =', dismissed);
+        if (dismissed === 'true') {
+          console.log('🔔 Permission card: User permanently dismissed, not showing');
+          setShowPermissionCard(false);
+          return;
+        }
+
+        // Check notification permission
+        const { status: notifStatus } = await Notifications.getPermissionsAsync();
+        const notifGranted = notifStatus === 'granted';
+        setNotificationGranted(notifGranted);
+        console.log('🔔 Permission card: Notification status =', notifStatus, ', granted =', notifGranted);
+
+        // Check location permission
+        const { status: locStatus } = await Location.getForegroundPermissionsAsync();
+        const locGranted = locStatus === 'granted';
+        setLocationGranted(locGranted);
+        console.log('🔔 Permission card: Location status =', locStatus, ', granted =', locGranted);
+
+        // Show card if either permission is not granted
+        if (!notifGranted || !locGranted) {
+          console.log('🔔 Permission card: Showing card (missing permissions)');
+          setShowPermissionCard(true);
+          // Animate card in
+          Animated.timing(permissionCardAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }).start();
+        } else {
+          console.log('🔔 Permission card: Both permissions granted, hiding card');
+          setShowPermissionCard(false);
+        }
+      } catch (error) {
+        console.log('Permission card check error:', error?.message ?? error);
+      }
+    };
+
+    // Check after a short delay
+    const timer = setTimeout(checkPermissionsForCard, 1500);
+    return () => clearTimeout(timer);
+  }, [permissionCardAnim]);
+
+  // Handle "Enable Now" button press
+  const handleEnablePermissions = async () => {
+    let needsSettings = false;
+
+    try {
+      // Check and request notification permission
+      if (!notificationGranted) {
+        const { status: notifStatus } = await Notifications.getPermissionsAsync();
+        if (notifStatus === 'undetermined') {
+          const { status: newStatus } = await Notifications.requestPermissionsAsync();
+          if (newStatus === 'granted') {
+            setNotificationGranted(true);
+            // Save push token
+            try {
+              const pushToken = await registerForPushNotificationsAsync();
+              if (pushToken) {
+                const auth = getAuth();
+                const user = auth?.currentUser;
+                if (user) {
+                  const db = getFirebaseDb();
+                  if (db) {
+                    await updateDoc(doc(db, 'users', user.uid), {
+                      pushToken,
+                      pushTokenUpdatedAt: serverTimestamp(),
+                      updatedAt: serverTimestamp(),
+                    });
+                  }
+                }
+              }
+            } catch (e) {
+              console.log('Error saving push token:', e?.message ?? e);
+            }
+          } else {
+            needsSettings = true;
+          }
+        } else if (notifStatus === 'denied') {
+          needsSettings = true;
+        }
+      }
+
+      // Check and request location permission
+      if (!locationGranted) {
+        const { status: locStatus } = await Location.getForegroundPermissionsAsync();
+        if (locStatus === 'undetermined') {
+          const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
+          if (newStatus === 'granted') {
+            setLocationGranted(true);
+          } else {
+            needsSettings = true;
+          }
+        } else if (locStatus === 'denied') {
+          needsSettings = true;
+        }
+      }
+
+      // If any permission was denied, prompt to open settings
+      if (needsSettings) {
+        Alert.alert(
+          'Permissions Required',
+          'Some permissions were previously denied. Please enable them in Settings to get the full gaming experience.',
+          [
+            { text: 'Maybe Later', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+      }
+
+      // Re-check and hide card if both granted
+      const { status: finalNotif } = await Notifications.getPermissionsAsync();
+      const { status: finalLoc } = await Location.getForegroundPermissionsAsync();
+      
+      if (finalNotif === 'granted' && finalLoc === 'granted') {
+        setShowPermissionCard(false);
+        setNotificationGranted(true);
+        setLocationGranted(true);
+      }
+    } catch (error) {
+      console.log('Enable permissions error:', error?.message ?? error);
+    }
+  };
+
+  // Handle "Maybe Later" - dismiss for session only
+  const handleDismissForSession = () => {
+    Animated.timing(permissionCardAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowPermissionCard(false);
+    });
+  };
+
+  // Handle "Don't show again" - dismiss forever
+  const handleDismissForever = async () => {
+    try {
+      await AsyncStorage.setItem(PERMISSION_CARD_DISMISSED_KEY, 'true');
+      Animated.timing(permissionCardAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowPermissionCard(false);
+      });
+    } catch (error) {
+      console.log('Error saving dismiss preference:', error?.message ?? error);
+      setShowPermissionCard(false);
+    }
+  };
 
   // Listen to live games
   useEffect(() => {
@@ -381,6 +554,71 @@ const CommunityScreen = () => {
 
   return (
     <GradientBackground>
+      {/* Permission Reminder Card */}
+      {showPermissionCard && (
+        <Animated.View
+          style={[
+            styles.permissionCardContainer,
+            {
+              opacity: permissionCardAnim,
+              transform: [{
+                translateY: permissionCardAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-20, 0],
+                }),
+              }],
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={['#00D4E5', '#10B981']}
+            style={styles.permissionCard}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            {/* Icons */}
+            <View style={styles.permissionIconRow}>
+              <View style={styles.permissionIconCircle}>
+                <Ionicons name="notifications" size={24} color="#FFFFFF" />
+              </View>
+              <View style={styles.permissionIconCircle}>
+                <Ionicons name="location" size={24} color="#FFFFFF" />
+              </View>
+            </View>
+
+            {/* Text */}
+            <Text style={styles.permissionCardTitle}>
+              Enable Notifications & Location
+            </Text>
+            <Text style={styles.permissionCardSubtitle}>
+              Critical for your gaming experience!
+            </Text>
+
+            {/* Enable Button */}
+            <TouchableOpacity
+              style={styles.permissionEnableButton}
+              onPress={handleEnablePermissions}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.permissionEnableButtonText}>
+                Enable Now
+              </Text>
+            </TouchableOpacity>
+
+            {/* Secondary Actions */}
+            <View style={styles.permissionSecondaryRow}>
+              <TouchableOpacity onPress={handleDismissForSession}>
+                <Text style={styles.permissionSecondaryText}>Maybe Later</Text>
+              </TouchableOpacity>
+              <Text style={styles.permissionSecondaryDot}>•</Text>
+              <TouchableOpacity onPress={handleDismissForever}>
+                <Text style={styles.permissionSecondaryText}>Don&apos;t show again</Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+      )}
+
       <ScrollView
         style={[styles.container, { marginBottom: insets.bottom + 85 }]}
         contentContainerStyle={[
@@ -817,6 +1055,84 @@ const CommunityScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  // Permission Card Styles
+  permissionCardContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 40,
+    left: 16,
+    right: 16,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  permissionCard: {
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+  },
+  permissionIconRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    gap: 12,
+  },
+  permissionIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  permissionCardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  permissionCardSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.85)',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  permissionEnableButton: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 30,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  permissionEnableButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#10B981',
+    textAlign: 'center',
+  },
+  permissionSecondaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  permissionSecondaryText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.7)',
+    textDecorationLine: 'underline',
+  },
+  permissionSecondaryDot: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.5)',
   },
   webContent: {
     maxWidth: 1000,

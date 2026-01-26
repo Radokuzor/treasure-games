@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Flappy Bird</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      min-height: 100vh;
+      overflow: hidden;
+      touch-action: none;
+    }
+    
+    /* Instructions Screen */
+    #instructions-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 1000;
+      color: white;
+    }
+    
+    #instructions-screen.hidden {
+      display: none;
+    }
+    
+    .instructions-title {
+      font-size: 36px;
+      font-weight: 800;
+      margin-bottom: 4px;
+      text-shadow: 0 0 20px rgba(255, 200, 50, 0.5);
+      color: #ffd93d;
+    }
+    
+    .instructions-subtitle {
+      font-size: 14px;
+      opacity: 0.8;
+      margin-bottom: 20px;
+      color: #4ecdc4;
+    }
+    
+    .instructions-box {
+      background: rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 16px;
+      max-width: 320px;
+      width: 100%;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .instruction-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: white;
+    }
+    
+    .instruction-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .instruction-icon {
+      font-size: 22px;
+      margin-right: 12px;
+      min-width: 30px;
+      text-align: center;
+    }
+    
+    .instruction-text strong {
+      color: #ffd93d;
+    }
+    
+    .start-button {
+      margin-top: 20px;
+      background: linear-gradient(135deg, #ffd93d 0%, #f0c419 100%);
+      border: none;
+      padding: 14px 40px;
+      border-radius: 30px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a2e;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(255, 217, 61, 0.4);
+    }
+    
+    .start-button:active {
+      transform: scale(0.95);
+    }
+    
+    /* Game HUD */
+    #game-hud {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 8px 12px;
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+      z-index: 100;
+    }
+    
+    .hud-item {
+      text-align: center;
+      color: white;
+    }
+    
+    .hud-label {
+      font-size: 9px;
+      opacity: 0.7;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .hud-value {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    
+    .hud-value.score { color: #ffd93d; }
+    .hud-value.best { color: #10B981; }
+    .hud-value.time { color: #4ecdc4; }
+    
+    /* Timer Bar */
+    #timer-bar-container {
+      position: fixed;
+      top: 50px;
+      left: 12px;
+      right: 12px;
+      height: 4px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+      z-index: 100;
+      display: none;
+    }
+    
+    #timer-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #4ecdc4, #44a08d);
+      border-radius: 2px;
+      transition: width 1s linear;
+    }
+    
+    /* Game Canvas */
+    #game-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+    
+    /* Score Popup */
+    .score-popup {
+      position: absolute;
+      font-size: 24px;
+      font-weight: 800;
+      color: #ffd93d;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+      pointer-events: none;
+      animation: scoreFloat 1s ease-out forwards;
+      z-index: 50;
+    }
+    
+    @keyframes scoreFloat {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-50px) scale(1.5); }
+    }
+    
+    /* Game Over - only shows when time is up */
+    #game-over {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 500;
+      color: white;
+    }
+    
+    #game-over.show {
+      display: flex;
+    }
+    
+    .game-over-title {
+      font-size: 32px;
+      font-weight: 800;
+      color: #ffd93d;
+      margin-bottom: 8px;
+    }
+    
+    .game-over-score {
+      font-size: 56px;
+      font-weight: 800;
+      color: #ffd93d;
+      margin-bottom: 4px;
+    }
+    
+    .game-over-stats {
+      font-size: 14px;
+      opacity: 0.7;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    
+    .submitting-text {
+      font-size: 16px;
+      color: #4ecdc4;
+    }
+    
+    /* Crash notification banner */
+    #crash-notification {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid rgba(255, 68, 68, 0.6);
+      border-radius: 15px;
+      padding: 15px 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 150;
+      opacity: 0;
+      pointer-events: none;
+    }
+    
+    #crash-notification.show {
+      animation: crashPopIn 0.4s ease-out forwards, crashPopOut 0.3s ease-in 1.2s forwards;
+    }
+    
+    @keyframes crashPopIn {
+      0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+      50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+    
+    @keyframes crashPopOut {
+      0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+    }
+    
+    .crash-icon {
+      font-size: 36px;
+    }
+    
+    .crash-text {
+      font-size: 18px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.9);
+      margin: 3px 0;
+    }
+    
+    .crash-points {
+      font-size: 28px;
+      font-weight: 800;
+      color: #ff6b6b;
+    }
+    
+    /* Invincibility bar */
+    #invincibility-bar {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 150px;
+      height: 6px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 3px;
+      display: none;
+      z-index: 100;
+    }
+    
+    #invincibility-bar.show {
+      display: block;
+    }
+    
+    #invincibility-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00ff88, #00ffff);
+      border-radius: 3px;
+      box-shadow: 0 0 10px #00ff88;
+    }
+    
+    #invincibility-label {
+      position: fixed;
+      top: 42px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      font-weight: 700;
+      color: #00ff88;
+      text-shadow: 0 0 10px #00ff88;
+      display: none;
+      z-index: 100;
+    }
+    
+    #invincibility-label.show {
+      display: block;
+    }
+    
+    /* Tap indicator */
+    #tap-indicator {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-size: 16px;
+      opacity: 0.7;
+      display: none;
+      animation: tapPulse 1s ease-in-out infinite;
+    }
+    
+    @keyframes tapPulse {
+      0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+      50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Instructions Screen -->
+  <div id="instructions-screen">
+    <div class="instructions-title">🐦 Flappy Bird</div>
+    <div class="instructions-subtitle">Fly through the pipes!</div>
+    
+    <div class="instructions-box">
+      <div class="instruction-item">
+        <span class="instruction-icon">👆</span>
+        <span class="instruction-text"><strong>Tap anywhere</strong> to make the bird flap and fly up</span>
+      </div>
+      <div class="instruction-item">
+        <span class="instruction-icon">🚧</span>
+        <span class="instruction-text">Avoid the <strong>pipes</strong> - don't crash into them!</span>
+      </div>
+      <div class="instruction-item">
+        <span class="instruction-icon">⭐</span>
+        <span class="instruction-text">Each pipe passed = <strong>+1 point</strong></span>
+      </div>
+      <div class="instruction-item">
+        <span class="instruction-icon">💥</span>
+        <span class="instruction-text">Crash? <strong>-50 points</strong> but you respawn with protection!</span>
+      </div>
+      <div class="instruction-item">
+        <span class="instruction-icon">🛡️</span>
+        <span class="instruction-text">After crashing, you're <strong>invincible for 7 seconds</strong></span>
+      </div>
+      <div class="instruction-item">
+        <span class="instruction-icon">🏆</span>
+        <span class="instruction-text">Highest <strong>score</strong> when time ends wins!</span>
+      </div>
+    </div>
+    
+    <button class="start-button" onclick="startGame()">🚀 Start Flying!</button>
+  </div>
+  
+  <!-- Game HUD -->
+  <div id="game-hud">
+    <div class="hud-item">
+      <div class="hud-label">Score</div>
+      <div class="hud-value score" id="score-display">0</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">Pipes</div>
+      <div class="hud-value best" id="pipes-display">0</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">Time</div>
+      <div class="hud-value time" id="time-display">15:00</div>
+    </div>
+  </div>
+  
+  <!-- Timer Bar -->
+  <div id="timer-bar-container">
+    <div id="timer-bar" style="width: 100%;"></div>
+  </div>
+  
+  <!-- Game Canvas -->
+  <canvas id="game-canvas"></canvas>
+  
+  <!-- Tap Indicator -->
+  <div id="tap-indicator">👆 Tap to Flap!</div>
+  
+  <!-- Crash Notification Banner -->
+  <div id="crash-notification">
+    <div class="crash-icon">💥</div>
+    <div class="crash-text">CRASHED!</div>
+    <div class="crash-points" id="crash-points">-50</div>
+  </div>
+  
+  <!-- Invincibility Bar -->
+  <div id="invincibility-label">🛡️ PROTECTED</div>
+  <div id="invincibility-bar">
+    <div id="invincibility-fill" style="width: 100%"></div>
+  </div>
+  
+  <!-- Game Over - only when time is up -->
+  <div id="game-over">
+    <div class="game-over-title">⏰ Time's Up!</div>
+    <div class="game-over-score" id="final-score">0</div>
+    <div class="game-over-stats" id="final-stats">Total Pipes: 0</div>
+    <div class="submitting-text">📤 Submitting your score...</div>
+  </div>
+
+  <script>
+    // ============================================
+    // INIT MESSAGE HANDLER - Must be first!
+    // ============================================
+    let totalGameTime = 900; // 15 minutes default
+    let remainingTime = 900;
+    let initReceived = false;
+    
+    function handleInit(data) {
+      if (initReceived) return; // Only handle once
+      initReceived = true;
+      
+      console.log('🎮 Flappy Bird received init:', data);
+      
+      totalGameTime = data.remainingTime || data.gameTime || 900;
+      remainingTime = totalGameTime;
+      
+      // Update timer display immediately
+      const minutes = Math.floor(remainingTime / 60);
+      const seconds = remainingTime % 60;
+      const timeDisplay = document.getElementById('time-display');
+      const timerBar = document.getElementById('timer-bar');
+      if (timeDisplay) {
+        timeDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+      if (timerBar) {
+        timerBar.style.width = '100%';
+      }
+      
+      console.log('🎮 Flappy Bird timer set to:', totalGameTime, 'seconds');
+    }
+    
+    // Global handler for injected init
+    window.handleInitMessage = handleInit;
+    
+    // Listen for messages immediately
+    window.addEventListener('message', (event) => {
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data && data.type === 'init') {
+          handleInit(data);
+        }
+      } catch (e) {}
+    });
+    
+    document.addEventListener('message', (event) => {
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data && data.type === 'init') {
+          handleInit(data);
+        }
+      } catch (e) {}
+    });
+    // ============================================
+    
+    // Canvas setup
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    // Game constants
+    const GRAVITY = 0.5;
+    const FLAP_FORCE = -9;
+    const PIPE_SPEED = 3;
+    const PIPE_GAP = 180;
+    const PIPE_WIDTH = 70;
+    const PIPE_SPAWN_INTERVAL = 1800;
+    const BIRD_SIZE = 35;
+    
+    // Game state
+    let gameStarted = false;
+    let gameEnded = false;
+    let score = 0;
+    let totalPipes = 0;
+    // totalGameTime and remainingTime are declared at the top for early init
+    let timerInterval = null;
+    let lastFrameTime = 0;
+    let timeUp = false;
+    
+    // Bird
+    let bird = {
+      x: 0,
+      y: 0,
+      velocity: 0,
+      rotation: 0,
+      invincible: false,
+      invincibleUntil: 0
+    };
+    
+    const INVINCIBILITY_DURATION = 7000; // 7 seconds
+    
+    // Pipes
+    let pipes = [];
+    let lastPipeSpawn = 0;
+    
+    // Particles
+    let particles = [];
+    
+    // Initialize bird position
+    function initBird() {
+      bird.x = canvas.width * 0.25;
+      bird.y = canvas.height / 2;
+      bird.velocity = 0;
+      bird.rotation = 0;
+    }
+    
+    // Flap
+    function flap() {
+      if (gameEnded) return;
+      bird.velocity = FLAP_FORCE;
+      
+      // Vibrate feedback
+      if (navigator.vibrate) navigator.vibrate(10);
+    }
+    
+    // Activate invincibility
+    function activateInvincibility() {
+      bird.invincible = true;
+      bird.invincibleUntil = Date.now() + INVINCIBILITY_DURATION;
+      
+      document.getElementById('invincibility-bar').classList.add('show');
+      document.getElementById('invincibility-label').classList.add('show');
+      document.getElementById('invincibility-fill').style.width = '100%';
+    }
+    
+    // Update invincibility
+    function updateInvincibility() {
+      if (bird.invincible) {
+        const remaining = bird.invincibleUntil - Date.now();
+        if (remaining <= 0) {
+          bird.invincible = false;
+          document.getElementById('invincibility-bar').classList.remove('show');
+          document.getElementById('invincibility-label').classList.remove('show');
+        } else {
+          const percentage = (remaining / INVINCIBILITY_DURATION) * 100;
+          document.getElementById('invincibility-fill').style.width = `${percentage}%`;
+        }
+      }
+    }
+    
+    // Spawn pipe
+    function spawnPipe() {
+      const minHeight = 80;
+      const maxHeight = canvas.height - PIPE_GAP - minHeight - 100;
+      const topHeight = minHeight + Math.random() * maxHeight;
+      
+      pipes.push({
+        x: canvas.width + PIPE_WIDTH,
+        topHeight: topHeight,
+        bottomY: topHeight + PIPE_GAP,
+        passed: false
+      });
+    }
+    
+    // Check collision - only pipes, not ground/ceiling
+    function checkCollision() {
+      // Pipes only
+      for (const pipe of pipes) {
+        const birdLeft = bird.x - BIRD_SIZE / 2;
+        const birdRight = bird.x + BIRD_SIZE / 2;
+        const birdTop = bird.y - BIRD_SIZE / 2;
+        const birdBottom = bird.y + BIRD_SIZE / 2;
+        
+        const pipeLeft = pipe.x;
+        const pipeRight = pipe.x + PIPE_WIDTH;
+        
+        // Check if bird is within pipe x range
+        if (birdRight > pipeLeft && birdLeft < pipeRight) {
+          // Check top pipe collision
+          if (birdTop < pipe.topHeight) {
+            return true;
+          }
+          // Check bottom pipe collision
+          if (birdBottom > pipe.bottomY) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    }
+    
+    // Update game
+    function update(deltaTime) {
+      if (gameEnded) return;
+      
+      // Update invincibility
+      updateInvincibility();
+      
+      // Update bird
+      bird.velocity += GRAVITY;
+      bird.y += bird.velocity;
+      
+      // Keep bird within bounds - rest on ground, can't go above ceiling
+      const groundY = canvas.height - 50 - BIRD_SIZE / 2;
+      const ceilingY = BIRD_SIZE / 2;
+      
+      if (bird.y > groundY) {
+        bird.y = groundY;
+        bird.velocity = 0; // Stop falling when on ground
+      }
+      if (bird.y < ceilingY) {
+        bird.y = ceilingY;
+        bird.velocity = 0; // Stop rising when at ceiling
+      }
+      
+      // Rotation based on velocity
+      bird.rotation = Math.min(Math.max(bird.velocity * 3, -30), 90);
+      
+      // Spawn pipes
+      const now = Date.now();
+      if (now - lastPipeSpawn > PIPE_SPAWN_INTERVAL) {
+        spawnPipe();
+        lastPipeSpawn = now;
+      }
+      
+      // Update pipes
+      pipes = pipes.filter(pipe => {
+        pipe.x -= PIPE_SPEED;
+        
+        // Check if passed
+        if (!pipe.passed && pipe.x + PIPE_WIDTH < bird.x) {
+          pipe.passed = true;
+          score++;
+          totalPipes++;
+          
+          // Show score popup
+          showScorePopup();
+          
+          updateHUD();
+        }
+        
+        return pipe.x > -PIPE_WIDTH;
+      });
+      
+      // Update particles
+      particles = particles.filter(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.2;
+        p.life--;
+        return p.life > 0;
+      });
+      
+      // Check collision (only if not invincible)
+      if (!bird.invincible && checkCollision()) {
+        crashBird();
+      }
+    }
+    
+    // Show score popup
+    function showScorePopup() {
+      const popup = document.createElement('div');
+      popup.className = 'score-popup';
+      popup.textContent = '+1';
+      popup.style.left = (bird.x + 30) + 'px';
+      popup.style.top = (bird.y - 30) + 'px';
+      document.body.appendChild(popup);
+      setTimeout(() => popup.remove(), 1000);
+    }
+    
+    // Crash bird - respawn with point penalty (tournament mode)
+    function crashBird() {
+      // Deduct points (minimum 0)
+      const pointsLost = 50;
+      score = Math.max(0, score - pointsLost);
+      
+      // Create explosion particles
+      for (let i = 0; i < 20; i++) {
+        particles.push({
+          x: bird.x,
+          y: bird.y,
+          vx: (Math.random() - 0.5) * 10,
+          vy: (Math.random() - 0.5) * 10,
+          life: 30,
+          color: Math.random() > 0.5 ? '#ffd93d' : '#ff6b6b'
+        });
+      }
+      
+      // Screen shake
+      canvas.style.transform = `translate(${(Math.random()-0.5)*20}px, ${(Math.random()-0.5)*20}px)`;
+      setTimeout(() => canvas.style.transform = '', 100);
+      
+      // Vibrate
+      if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+      
+      // Show crash notification (non-blocking)
+      document.getElementById('crash-points').textContent = `-${pointsLost}`;
+      const crashNotif = document.getElementById('crash-notification');
+      crashNotif.classList.remove('show');
+      void crashNotif.offsetWidth;
+      crashNotif.classList.add('show');
+      
+      setTimeout(() => {
+        crashNotif.classList.remove('show');
+      }, 1600);
+      
+      // Respawn bird at starting position
+      bird.y = canvas.height / 2;
+      bird.velocity = 0;
+      bird.rotation = 0;
+      
+      // Clear pipes near the bird to give breathing room
+      pipes = pipes.filter(pipe => pipe.x > bird.x + 150 || pipe.x + PIPE_WIDTH < bird.x - 50);
+      
+      // Activate 7 second invincibility
+      activateInvincibility();
+      
+      updateHUD();
+    }
+    
+    // Render game
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Background gradient
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#1a1a2e');
+      gradient.addColorStop(0.5, '#16213e');
+      gradient.addColorStop(1, '#0f3460');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Stars
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      for (let i = 0; i < 50; i++) {
+        const x = (i * 73) % canvas.width;
+        const y = (i * 37) % (canvas.height - 100);
+        const size = (i % 3) + 1;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // Ground
+      ctx.fillStyle = '#2d1f3d';
+      ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+      
+      // Ground pattern
+      ctx.fillStyle = '#3d2f4d';
+      for (let x = 0; x < canvas.width; x += 30) {
+        ctx.fillRect(x, canvas.height - 50, 15, 5);
+      }
+      
+      // Pipes
+      pipes.forEach(pipe => {
+        // Pipe gradient
+        const pipeGradient = ctx.createLinearGradient(pipe.x, 0, pipe.x + PIPE_WIDTH, 0);
+        pipeGradient.addColorStop(0, '#10B981');
+        pipeGradient.addColorStop(0.5, '#059669');
+        pipeGradient.addColorStop(1, '#047857');
+        
+        ctx.fillStyle = pipeGradient;
+        
+        // Top pipe
+        ctx.fillRect(pipe.x, 0, PIPE_WIDTH, pipe.topHeight);
+        // Top pipe cap
+        ctx.fillRect(pipe.x - 5, pipe.topHeight - 25, PIPE_WIDTH + 10, 25);
+        
+        // Bottom pipe
+        ctx.fillRect(pipe.x, pipe.bottomY, PIPE_WIDTH, canvas.height - pipe.bottomY - 50);
+        // Bottom pipe cap
+        ctx.fillRect(pipe.x - 5, pipe.bottomY, PIPE_WIDTH + 10, 25);
+        
+        // Pipe highlights
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.fillRect(pipe.x + 5, 0, 10, pipe.topHeight - 25);
+        ctx.fillRect(pipe.x + 5, pipe.bottomY + 25, 10, canvas.height - pipe.bottomY - 75);
+      });
+      
+      // Particles
+      particles.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life / 30;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+      
+      // Bird - blink when invincible
+      const shouldDrawBird = !bird.invincible || Math.floor(Date.now() / 100) % 2 === 0;
+      
+      if (shouldDrawBird) {
+        ctx.save();
+        ctx.translate(bird.x, bird.y);
+        ctx.rotate(bird.rotation * Math.PI / 180);
+        
+        // Glow effect when invincible
+        if (bird.invincible) {
+          ctx.shadowColor = '#00ff88';
+          ctx.shadowBlur = 20;
+        }
+        
+        // Bird body
+        ctx.fillStyle = bird.invincible ? '#00ff88' : '#ffd93d';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, BIRD_SIZE / 2, BIRD_SIZE / 2.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Bird wing
+        ctx.fillStyle = bird.invincible ? '#00cc66' : '#f0c419';
+        ctx.beginPath();
+        ctx.ellipse(-5, 5, 12, 8, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.shadowBlur = 0;
+        
+        // Bird eye
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(8, -5, 8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(10, -5, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Bird beak
+        ctx.fillStyle = '#ff6b6b';
+        ctx.beginPath();
+        ctx.moveTo(15, 0);
+        ctx.lineTo(25, 3);
+        ctx.lineTo(15, 6);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.restore();
+      }
+      
+      // Current score (big, center)
+      if (!gameEnded) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = 'bold 64px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(score.toString(), canvas.width / 2, 120);
+      }
+    }
+    
+    // Update HUD
+    function updateHUD() {
+      document.getElementById('score-display').textContent = score;
+      document.getElementById('pipes-display').textContent = totalPipes;
+    }
+    
+    // Update timer
+    function updateTimer() {
+      if (gameEnded || timeUp) {
+        console.log('⚠️ updateTimer called but game already ended');
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+        return;
+      }
+      
+      if (remainingTime <= 0) {
+        console.log('⏰ Time is up! Calling finalEndGame...');
+        finalEndGame();
+        return;
+      }
+      
+      remainingTime--;
+      
+      const minutes = Math.floor(remainingTime / 60);
+      const seconds = remainingTime % 60;
+      const timeDisplay = document.getElementById('time-display');
+      const timerBar = document.getElementById('timer-bar');
+      
+      if (timeDisplay) {
+        timeDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+      
+      if (timerBar) {
+        const percentage = Math.max(0, (remainingTime / totalGameTime) * 100);
+        timerBar.style.width = `${percentage}%`;
+      }
+    }
+    
+    // Final end game (time's up) - only way game ends in tournament
+    function finalEndGame() {
+      if (gameEnded) {
+        console.log('⚠️ finalEndGame called but game already ended');
+        return;
+      }
+      
+      console.log('🏁 Flappy Bird finalEndGame called:', { score, totalPipes, remainingTime });
+      
+      timeUp = true;
+      gameEnded = true;
+      
+      // Clear timer interval
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      
+      // Update UI
+      document.getElementById('final-score').textContent = score;
+      document.getElementById('final-stats').textContent = `Total Pipes Passed: ${totalPipes}`;
+      document.getElementById('game-over').classList.add('show');
+      
+      // Send score after a short delay to ensure UI is updated
+      console.log('📤 Scheduling score submission in 1 second...');
+      setTimeout(() => {
+        console.log('📤 Sending score now:', score);
+        sendScore(score);
+      }, 1000);
+    }
+    
+    // Send score
+    function sendScore(finalScore) {
+      console.log('🎮 Flappy Bird sendScore called with:', { finalScore, totalPipes, gameEnded, timeUp });
+      
+      if (typeof finalScore !== 'number' || isNaN(finalScore)) {
+        console.error('❌ Invalid score value:', finalScore);
+        finalScore = 0;
+      }
+      
+      const message = JSON.stringify({
+        type: 'gameComplete',
+        score: finalScore,
+        totalPipes: totalPipes
+      });
+
+      console.log('🎮 Flappy Bird sending score message:', message);
+
+      try {
+        if (window.ReactNativeWebView) {
+          console.log('🎮 Sending via ReactNativeWebView.postMessage');
+          window.ReactNativeWebView.postMessage(message);
+        } else if (window.parent !== window) {
+          // Web iframe - send to parent
+          console.log('🎮 Sending via window.parent.postMessage');
+          window.parent.postMessage(message, '*');
+        } else {
+          console.log('🎮 No WebView context, logging only:', message);
+        }
+        console.log('✅ Score message sent successfully');
+      } catch (error) {
+        console.error('❌ Error sending score:', error);
+      }
+    }
+    
+    // Game loop
+    function gameLoop(timestamp) {
+      const deltaTime = timestamp - lastFrameTime;
+      lastFrameTime = timestamp;
+      
+      if (gameStarted && !gameEnded) {
+        update(deltaTime);
+      }
+      
+      render();
+      
+      if (!timeUp) {
+        requestAnimationFrame(gameLoop);
+      }
+    }
+    
+    // Start game
+    function startGame() {
+      document.getElementById('instructions-screen').classList.add('hidden');
+      document.getElementById('game-hud').style.display = 'flex';
+      document.getElementById('timer-bar-container').style.display = 'block';
+      document.getElementById('game-canvas').style.display = 'block';
+      document.getElementById('tap-indicator').style.display = 'block';
+
+      gameStarted = true;
+      initBird();
+      updateHUD();
+      
+      // Display initial timer value
+      const minutes = Math.floor(remainingTime / 60);
+      const seconds = remainingTime % 60;
+      document.getElementById('time-display').textContent =
+        `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      document.getElementById('timer-bar').style.width = '100%';
+
+      // Hide tap indicator after first tap
+      const hideTapIndicator = () => {
+        document.getElementById('tap-indicator').style.display = 'none';
+        canvas.removeEventListener('touchstart', hideTapIndicator);
+        canvas.removeEventListener('mousedown', hideTapIndicator);
+      };
+      canvas.addEventListener('touchstart', hideTapIndicator);
+      canvas.addEventListener('mousedown', hideTapIndicator);
+
+      // Start timer
+      timerInterval = setInterval(updateTimer, 1000);
+
+      // Start game loop
+      lastPipeSpawn = Date.now();
+      requestAnimationFrame(gameLoop);
+    }
+    
+    // Touch controls
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      flap();
+    });
+    
+    canvas.addEventListener('mousedown', (e) => {
+      flap();
+    });
+    
+    // Keyboard controls (for testing)
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        flap();
+      }
+    });
+    
+    // Additional message handlers for timeSync and forceEnd
+    window.addEventListener('message', (event) => {
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data && data.type === 'timeSync') {
+          remainingTime = data.remainingTime || remainingTime;
+          updateTimer();
+        }
+        if (data && data.type === 'forceEnd') {
+          finalEndGame();
+        }
+      } catch (e) {}
+    });
+
+    // Initialize with defaults if no message received after 2 seconds
+    setTimeout(() => {
+      if (!initReceived && totalGameTime === 900 && remainingTime === 900) {
+        console.log('🎮 Flappy Bird: No init received, using defaults');
+        updateTimer();
+      }
+    }, 2000);
+  </script>
+</body>
+</html>
