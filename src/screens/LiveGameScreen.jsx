@@ -502,10 +502,22 @@ export default function LiveGameScreen({ route, navigation }) {
         return;
       }
       
+      // Wait a few seconds after game ends to allow any pending score saves to complete
+      const timeSinceEnd = now.getTime() - endsAt.getTime();
+      const WAIT_TIME_MS = 3000; // Wait 3 seconds after game ends
+      
+      if (timeSinceEnd < WAIT_TIME_MS) {
+        // Game just ended, wait a bit before processing to allow score saves
+        const waitTime = WAIT_TIME_MS - timeSinceEnd;
+        console.log(`⏳ Game just ended, waiting ${waitTime}ms for score saves to complete...`);
+        return; // Will check again on next interval
+      }
+      
       console.log('🏁 ========================================');
       console.log('🏁 Tournament timer has ended!');
       console.log('🏁 Game ID:', gameId);
       console.log('🏁 Current user:', currentUser?.uid);
+      console.log('🏁 Time since end:', Math.floor(timeSinceEnd / 1000), 'seconds');
       console.log('🏁 ========================================');
       
       processingWinnersRef.current = true; // Lock processing
@@ -544,9 +556,19 @@ export default function LiveGameScreen({ route, navigation }) {
           status: currentGameData.status,
         });
         
-        // Handle case where no one played - still complete the game with no winners
+        // Handle case where no one played - but wait a bit in case scores are still being saved
         if (!currentGameData.leaderboard || currentGameData.leaderboard.length === 0) {
-          console.log('ℹ️ No leaderboard entries found - completing game with no winners');
+          const timeSinceEnd = Date.now() - endsAt.getTime();
+          const MAX_WAIT_TIME_MS = 5000; // Wait up to 5 seconds for scores to save
+          
+          // If game just ended (within 5 seconds), wait a bit more before completing with no winners
+          if (timeSinceEnd < MAX_WAIT_TIME_MS) {
+            console.log(`⏳ No leaderboard entries yet, but game just ended ${Math.floor(timeSinceEnd / 1000)}s ago. Waiting for scores to save...`);
+            processingWinnersRef.current = false; // Release lock to allow retry
+            return; // Will check again on next interval
+          }
+          
+          console.log('ℹ️ No leaderboard entries found after waiting - completing game with no winners');
           
           // Use transaction to atomically set processing flag and check status
           let shouldProcess = false;

@@ -368,7 +368,7 @@
       </div>
       <div class="instruction-item">
         <span class="instruction-icon">💥</span>
-        <span class="instruction-text">Crash? <strong>-50 points</strong> but you respawn with protection!</span>
+        <span class="instruction-text">Crash? <strong>-7 points</strong> but you respawn with protection!</span>
       </div>
       <div class="instruction-item">
         <span class="instruction-icon">🛡️</span>
@@ -414,7 +414,7 @@
   <div id="crash-notification">
     <div class="crash-icon">💥</div>
     <div class="crash-text">CRASHED!</div>
-    <div class="crash-points" id="crash-points">-50</div>
+    <div class="crash-points" id="crash-points">-7</div>
   </div>
   
   <!-- Invincibility Bar -->
@@ -701,7 +701,7 @@
     // Crash bird - respawn with point penalty (tournament mode)
     function crashBird() {
       // Deduct points (minimum 0)
-      const pointsLost = 50;
+      const pointsLost = 7;
       score = Math.max(0, score - pointsLost);
       
       // Create explosion particles
@@ -886,17 +886,8 @@
     
     // Update timer
     function updateTimer() {
-      if (gameEnded || timeUp) {
-        console.log('⚠️ updateTimer called but game already ended');
-        if (timerInterval) {
-          clearInterval(timerInterval);
-          timerInterval = null;
-        }
-        return;
-      }
-      
       if (remainingTime <= 0) {
-        console.log('⏰ Time is up! Calling finalEndGame...');
+        console.log('⏰ Timer reached 0, calling finalEndGame...');
         finalEndGame();
         return;
       }
@@ -905,16 +896,15 @@
       
       const minutes = Math.floor(remainingTime / 60);
       const seconds = remainingTime % 60;
-      const timeDisplay = document.getElementById('time-display');
-      const timerBar = document.getElementById('timer-bar');
+      document.getElementById('time-display').textContent = 
+        `${minutes}:${seconds.toString().padStart(2, '0')}`;
       
-      if (timeDisplay) {
-        timeDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-      }
+      const percentage = (remainingTime / totalGameTime) * 100;
+      document.getElementById('timer-bar').style.width = `${percentage}%`;
       
-      if (timerBar) {
-        const percentage = Math.max(0, (remainingTime / totalGameTime) * 100);
-        timerBar.style.width = `${percentage}%`;
+      // Log every 10 seconds for debugging
+      if (remainingTime % 10 === 0) {
+        console.log('⏱️ Flappy Bird timer:', remainingTime, 'seconds remaining, score:', score);
       }
     }
     
@@ -925,61 +915,40 @@
         return;
       }
       
-      console.log('🏁 Flappy Bird finalEndGame called:', { score, totalPipes, remainingTime });
+      console.log('🏁 Flappy Bird finalEndGame called!', { score, totalPipes, remainingTime });
       
       timeUp = true;
       gameEnded = true;
+      clearInterval(timerInterval);
       
-      // Clear timer interval
-      if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-      }
-      
-      // Update UI
       document.getElementById('final-score').textContent = score;
       document.getElementById('final-stats').textContent = `Total Pipes Passed: ${totalPipes}`;
       document.getElementById('game-over').classList.add('show');
       
-      // Send score after a short delay to ensure UI is updated
-      console.log('📤 Scheduling score submission in 1 second...');
+      console.log('📤 Scheduling score submission in 1 second, score:', score);
       setTimeout(() => {
-        console.log('📤 Sending score now:', score);
+        console.log('📤 Calling sendScore with:', score);
         sendScore(score);
       }, 1000);
     }
     
-    // Send score
+    // Send score to React Native
     function sendScore(finalScore) {
-      console.log('🎮 Flappy Bird sendScore called with:', { finalScore, totalPipes, gameEnded, timeUp });
-      
-      if (typeof finalScore !== 'number' || isNaN(finalScore)) {
-        console.error('❌ Invalid score value:', finalScore);
-        finalScore = 0;
-      }
-      
       const message = JSON.stringify({
         type: 'gameComplete',
         score: finalScore,
         totalPipes: totalPipes
       });
-
-      console.log('🎮 Flappy Bird sending score message:', message);
-
-      try {
-        if (window.ReactNativeWebView) {
-          console.log('🎮 Sending via ReactNativeWebView.postMessage');
-          window.ReactNativeWebView.postMessage(message);
-        } else if (window.parent !== window) {
-          // Web iframe - send to parent
-          console.log('🎮 Sending via window.parent.postMessage');
-          window.parent.postMessage(message, '*');
-        } else {
-          console.log('🎮 No WebView context, logging only:', message);
-        }
-        console.log('✅ Score message sent successfully');
-      } catch (error) {
-        console.error('❌ Error sending score:', error);
+      
+      console.log('🎮 Flappy Bird sending score:', message);
+      
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(message);
+      } else if (window.parent !== window) {
+        // Web iframe - send to parent
+        window.parent.postMessage(message, '*');
+      } else {
+        console.log('Score submitted:', message);
       }
     }
     
