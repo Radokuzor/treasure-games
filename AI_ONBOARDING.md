@@ -1,5 +1,4 @@
 # HoodGames / Grab The Cash - AI Onboarding Guide
-
 **Version**: 1.0.0
 **Last Updated**: January 2026
 **Project**: Grab The Cash (HoodGames)

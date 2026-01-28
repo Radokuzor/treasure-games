@@ -721,7 +721,7 @@
           // Update score
           lines += linesCleared;
           score += LINE_SCORES[linesCleared] * level;
-          level = Math.floor(lines / 10) + 1;
+          level = Math.floor(lines / 15) + 1; // Changed from 10 to 15 lines per level
           
           updateDisplay();
           renderBoard();
@@ -927,14 +927,15 @@
       gameStarted = true;
       
       // Start game loop (speed increases with level)
-      const getSpeed = () => Math.max(100, 1000 - (level - 1) * 100);
+      // More gradual difficulty: 50ms per level, minimum 400ms (was 100ms per level, min 100ms)
+      const getSpeed = () => Math.max(400, 1000 - (level - 1) * 50);
       
       const startLoop = () => {
         clearInterval(gameInterval);
         gameInterval = setInterval(() => {
           gameLoop();
           // Adjust speed based on level
-          if (getSpeed() !== (1000 - (level - 1) * 100)) {
+          if (getSpeed() !== (1000 - (level - 1) * 50)) {
             startLoop();
           }
         }, getSpeed());

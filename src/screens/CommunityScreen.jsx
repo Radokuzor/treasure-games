@@ -38,44 +38,6 @@ import { GradientBackground, GradientCard } from '../components/GradientComponen
 import { getFirebaseDb } from '../config/firebase';
 import { useTheme } from '../context/ThemeContext';
 
-const LEADERBOARD_DATA = [
-  { id: '1', name: 'Sarah Johnson', wins: 23, earnings: 12450, avatar: '👩‍🦰', rank: 1 },
-  { id: '2', name: 'Mike Chen', wins: 19, earnings: 9800, avatar: '👨', rank: 2 },
-  { id: '3', name: 'Jessica Lee', wins: 17, earnings: 8900, avatar: '👩', rank: 3 },
-  { id: '4', name: 'David Kim', wins: 15, earnings: 7650, avatar: '👨‍💼', rank: 4 },
-  { id: '5', name: 'Emma Wilson', wins: 14, earnings: 7200, avatar: '👱‍♀️', rank: 5 },
-];
-
-const RECENT_WINNERS = [
-  {
-    id: '1',
-    name: 'Sarah J.',
-    prize: '$500',
-    location: 'Central Park',
-    time: '2 mins',
-    avatar: '👩‍🦰',
-    description: 'Won near the fountain in record time!',
-  },
-  {
-    id: '2',
-    name: 'Mike C.',
-    prize: '$300',
-    location: 'Downtown Plaza',
-    time: '5 mins',
-    avatar: '👨',
-    description: 'Quick thinking led to the win at the city square.',
-  },
-  {
-    id: '3',
-    name: 'Jessica L.',
-    prize: '$750',
-    location: 'Riverside Park',
-    time: '3 mins',
-    avatar: '👩',
-    description: 'Beat 50+ hunters to claim the prize!',
-  },
-];
-
 const RECENT_DROPS = [
   { id: '1', amount: '$500', lat: 37.7749, lng: -122.4194, claimed: true, winner: 'Sarah' },
   { id: '2', amount: '$300', lat: 37.7849, lng: -122.4094, claimed: true, winner: 'Mike' },
@@ -94,6 +56,8 @@ const CommunityScreen = () => {
   const [showMap, setShowMap] = useState(false); // false = list view, true = map view
   const [liveGames, setLiveGames] = useState([]);
   const [loadingGames, setLoadingGames] = useState(true);
+  const [upcomingGames, setUpcomingGames] = useState([]);
+  const [loadingUpcoming, setLoadingUpcoming] = useState(true);
   const mapRef = useRef(null);
   const didCenterMapRef = useRef(false);
 
@@ -298,6 +262,105 @@ const CommunityScreen = () => {
     return () => unsubscribe();
   }, []);
 
+  // Listen to upcoming/scheduled games
+  useEffect(() => {
+    const db = getFirebaseDb();
+    if (!db) {
+      setLoadingUpcoming(false);
+      return;
+    }
+
+    // Query for scheduled games (status = 'scheduled')
+    const upcomingQuery = query(
+      collection(db, 'games'),
+      where('status', '==', 'scheduled')
+    );
+
+    const unsubscribe = onSnapshot(
+      upcomingQuery,
+      (snapshot) => {
+        console.log('📅 CommunityScreen: Received', snapshot.docs.length, 'upcoming games');
+        const games = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        console.log('📅 CommunityScreen: Processed upcoming games:', games);
+        setUpcomingGames(games);
+        setLoadingUpcoming(false);
+      },
+      (error) => {
+        console.error('❌ Error listening to upcoming games:', error);
+        setLoadingUpcoming(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Auto-launch scheduled games when their time arrives
+  useEffect(() => {
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    // Check every 30 seconds for games that should be launched
+    const checkScheduledGames = async () => {
+      try {
+        const now = new Date();
+        
+        // Check if any upcoming games should be launched
+        upcomingGames.forEach(async (game) => {
+          if (!game.scheduledTime) return;
+          
+          // Convert Firebase Timestamp to Date
+          const scheduledDate = game.scheduledTime.seconds 
+            ? new Date(game.scheduledTime.seconds * 1000)
+            : new Date(game.scheduledTime);
+          
+          // If scheduled time has passed, launch the game
+          if (scheduledDate <= now) {
+            console.log(`🚀 Auto-launching scheduled game: ${game.name} (${game.id})`);
+            
+            try {
+              const gameRef = doc(db, 'games', game.id);
+              
+              // Prepare update data
+              const updateData = {
+                status: 'live',
+                launchedAt: serverTimestamp(),
+                startsAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              };
+              
+              // For virtual games, calculate and set the end time
+              if (game.type === 'virtual' && game.virtualGame?.duration) {
+                const durationMs = game.virtualGame.duration;
+                const endsAt = new Date(Date.now() + durationMs);
+                updateData['virtualGame.endsAt'] = endsAt;
+                console.log(`⏱️ Virtual game will end at: ${endsAt.toLocaleString()}`);
+              }
+              
+              await updateDoc(gameRef, updateData);
+              
+              console.log(`✅ Successfully launched game: ${game.name}`);
+            } catch (error) {
+              console.error(`❌ Error launching game ${game.id}:`, error);
+            }
+          }
+        });
+      } catch (error) {
+        console.error('❌ Error in auto-launch check:', error);
+      }
+    };
+
+    // Run check immediately
+    checkScheduledGames();
+
+    // Then check every 30 seconds
+    const interval = setInterval(checkScheduledGames, 30000);
+
+    return () => clearInterval(interval);
+  }, [upcomingGames]); // Re-run when upcomingGames changes
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown(prev => {
@@ -379,178 +442,6 @@ const CommunityScreen = () => {
       isMounted = false;
     };
   }, [selectedTab, showMap]);
-
-  const getRankColor = (rank) => {
-    switch (rank) {
-      case 1: return theme.gradients.accent;
-      case 2: return ['#C0C0C0', '#E8E8E8'];
-      case 3: return ['#CD7F32', '#FFA500'];
-      default: return ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)'];
-    }
-  };
-
-  const handleReportUser = async (userId, userName) => {
-    Alert.alert(
-      'Report User',
-      `Report ${userName} for inappropriate username?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Report',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const auth = getAuth();
-              const currentUser = auth.currentUser;
-
-              if (!currentUser) {
-                Alert.alert('Error', 'You must be logged in to report users.');
-                return;
-              }
-
-              const db = getFirebaseDb();
-              if (!db) {
-                Alert.alert('Error', 'Unable to submit report. Please try again.');
-                return;
-              }
-
-              await addDoc(collection(db, 'reports'), {
-                reportedUserId: userId,
-                reportedUserName: userName,
-                reporterUserId: currentUser.uid,
-                reason: 'inappropriate_username',
-                timestamp: serverTimestamp(),
-                status: 'pending',
-              });
-
-              Alert.alert('Report Submitted', 'Thank you for helping keep our community safe.');
-            } catch (error) {
-              console.error('Error submitting report:', error);
-              Alert.alert('Error', 'Failed to submit report. Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const renderLeaderboardItem = (item) => (
-    <TouchableOpacity key={item.id} activeOpacity={0.7}>
-      <GradientCard style={styles.leaderboardCard}>
-        <LinearGradient
-          colors={getRankColor(item.rank)}
-          style={styles.rankBadge}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Text style={styles.rankText}>#{item.rank}</Text>
-        </LinearGradient>
-
-        <LinearGradient
-          colors={theme.gradients.primary}
-          style={styles.leaderboardAvatar}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Text style={styles.leaderboardAvatarText}>{item.avatar}</Text>
-        </LinearGradient>
-
-        <View style={styles.leaderboardInfo}>
-          <Text style={[styles.leaderboardName, { color: theme.colors.text }]}>
-            {item.name}
-          </Text>
-          <View style={styles.leaderboardStats}>
-            <View style={styles.statItem}>
-              <Ionicons name="trophy-outline" size={14} color={theme.colors.warning} />
-              <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
-                {item.wins} wins
-              </Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="cash-outline" size={14} color={theme.colors.success} />
-              <Text style={[styles.statText, { color: theme.colors.textSecondary }]}>
-                ${item.earnings.toLocaleString()}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.reportButton}
-          onPress={() => handleReportUser(item.id, item.name)}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.reportButtonCircle, { backgroundColor: theme.colors.cardBackground }]}>
-            <Ionicons name="information-circle-outline" size={18} color={theme.colors.textSecondary} />
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity>
-          <LinearGradient
-            colors={theme.gradients.accent}
-            style={styles.followButton}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          >
-            <Ionicons name="person-add-outline" size={16} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
-      </GradientCard>
-    </TouchableOpacity>
-  );
-
-  const renderWinnerCard = (item) => (
-    <TouchableOpacity key={item.id} activeOpacity={0.7}>
-      <GradientCard style={styles.winnerCard}>
-        <LinearGradient
-          colors={theme.gradients.accent}
-          style={styles.winnerAvatar}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Text style={styles.winnerAvatarText}>{item.avatar}</Text>
-        </LinearGradient>
-
-        <View style={styles.winnerInfo}>
-          <View style={styles.winnerHeader}>
-            <Text style={[styles.winnerName, { color: theme.colors.text }]}>
-              {item.name}
-            </Text>
-            <LinearGradient
-              colors={['#FFD700', '#FFA500']}
-              style={styles.prizeBadge}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Text style={styles.prizeText}>{item.prize}</Text>
-            </LinearGradient>
-          </View>
-
-          <Text style={[styles.winnerDescription, { color: theme.colors.textSecondary }]}>
-            {item.description}
-          </Text>
-
-          <View style={styles.winnerMeta}>
-            <View style={styles.metaItem}>
-              <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
-              <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>
-                {item.location}
-              </Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Ionicons name="time-outline" size={14} color={theme.colors.textSecondary} />
-              <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>
-                {item.time}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </GradientCard>
-    </TouchableOpacity>
-  );
 
   return (
     <GradientBackground>
@@ -697,17 +588,17 @@ const CommunityScreen = () => {
 
           <TouchableOpacity
             style={[styles.tab, isWeb && styles.webTab]}
-            onPress={() => setSelectedTab('leaderboard')}
+            onPress={() => setSelectedTab('upcoming')}
             activeOpacity={0.7}
           >
-            {selectedTab === 'leaderboard' ? (
+            {selectedTab === 'upcoming' ? (
               <LinearGradient
                 colors={theme.gradients.accent}
                 style={[styles.activeTab, isWeb && styles.webActiveTab]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                <Text style={styles.activeTabText}>Leaderboard</Text>
+                <Text style={styles.activeTabText}>Upcoming Games</Text>
               </LinearGradient>
             ) : (
               <LinearGradient
@@ -723,42 +614,7 @@ const CommunityScreen = () => {
                   end={{ x: 0, y: 1 }}
                 >
                   <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                    Leaderboard
-                  </Text>
-                </LinearGradient>
-              </LinearGradient>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tab, isWeb && styles.webTab]}
-            onPress={() => setSelectedTab('winners')}
-            activeOpacity={0.7}
-          >
-            {selectedTab === 'winners' ? (
-              <LinearGradient
-                colors={theme.gradients.accent}
-                style={[styles.activeTab, isWeb && styles.webActiveTab]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.activeTabText}>Winners</Text>
-              </LinearGradient>
-            ) : (
-              <LinearGradient
-                colors={['rgba(128, 128, 128, 0.4)', 'rgba(160, 160, 160, 0.5)']}
-                style={styles.inactiveTabBorder}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <LinearGradient
-                  colors={theme.gradients.background}
-                  style={styles.inactiveTabInner}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                >
-                  <Text style={[styles.tabText, { color: theme.colors.textSecondary }]}>
-                    Winners
+                    Upcoming Games
                   </Text>
                 </LinearGradient>
               </LinearGradient>
@@ -776,21 +632,112 @@ const CommunityScreen = () => {
 
         {/* Content based on selected tab */}
         <View style={styles.content}>
-          {selectedTab === 'leaderboard' && (
+          {selectedTab === 'upcoming' && (
             <View>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                🏆 Top Hunters
-              </Text>
-              {LEADERBOARD_DATA.map(renderLeaderboardItem)}
-            </View>
-          )}
-
-          {selectedTab === 'winners' && (
-            <View>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                🎉 Recent Winners
-              </Text>
-              {RECENT_WINNERS.map(renderWinnerCard)}
+              {loadingUpcoming ? (
+                <ActivityIndicator size="large" color={theme.colors.accent} style={{ marginTop: 40 }} />
+              ) : upcomingGames.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="calendar-outline" size={64} color={theme.colors.textSecondary} />
+                  <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+                    No scheduled games yet
+                  </Text>
+                  <Text style={[styles.emptyStateSubtext, { color: theme.colors.textSecondary }]}>
+                    Check back soon for upcoming games!
+                  </Text>
+                </View>
+              ) : (
+                upcomingGames.map((game) => (
+                  <TouchableOpacity
+                    key={game.id}
+                    onPress={() => navigation.navigate('LiveGame', { gameId: game.id })}
+                    activeOpacity={0.7}
+                  >
+                    <GradientCard style={styles.gameCard}>
+                      <View style={styles.gameCardHeader}>
+                        <View style={styles.gameCardLeft}>
+                          <View style={styles.gameCardTitleRow}>
+                            <Text style={[styles.gameCardTitle, { color: theme.colors.text }]}>
+                              {game.name}
+                            </Text>
+                            {/* Game Type Badge */}
+                            {game.type === 'virtual' ? (
+                              <LinearGradient
+                                colors={['#8B5CF6', '#6366F1']}
+                                style={styles.gameTypeBadge}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                              >
+                                <Ionicons name="game-controller" size={12} color="#FFFFFF" />
+                                <Text style={styles.gameTypeBadgeText}>VIRTUAL</Text>
+                              </LinearGradient>
+                            ) : (
+                              <LinearGradient
+                                colors={['#10B981', '#059669']}
+                                style={styles.gameTypeBadge}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                              >
+                                <Ionicons name="location" size={12} color="#FFFFFF" />
+                                <Text style={styles.gameTypeBadgeText}>LOCATION</Text>
+                              </LinearGradient>
+                            )}
+                            {/* Scheduled Badge */}
+                            <LinearGradient
+                              colors={['#F59E0B', '#D97706']}
+                              style={styles.gameTypeBadge}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 0 }}
+                            >
+                              <Ionicons name="time" size={12} color="#FFFFFF" />
+                              <Text style={styles.gameTypeBadgeText}>SCHEDULED</Text>
+                            </LinearGradient>
+                          </View>
+                          {game.type === 'virtual' ? (
+                            <Text style={[styles.gameCardLocation, { color: theme.colors.textSecondary }]}>
+                              🎮 Play from anywhere
+                            </Text>
+                          ) : (
+                            <Text style={[styles.gameCardLocation, { color: theme.colors.textSecondary }]}>
+                              📍 {game.city}
+                            </Text>
+                          )}
+                          {/* Scheduled Time */}
+                          {game.scheduledTime && (
+                            <Text style={[styles.gameCardLocation, { color: theme.colors.warning }]}>
+                              🕐 {game.scheduledTime.seconds 
+                                ? new Date(game.scheduledTime.seconds * 1000).toLocaleString()
+                                : new Date(game.scheduledTime).toLocaleString()}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={styles.gameCardRight}>
+                          <LinearGradient
+                            colors={['#FFD700', '#FFA500']}
+                            style={styles.liveGamePrizeBadge}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                          >
+                            <Text style={styles.liveGamePrizeText}>${game.prizeAmount}</Text>
+                          </LinearGradient>
+                        </View>
+                      </View>
+                      <View style={[styles.gameCardFooter, isWeb && styles.webGameCardFooter]}>
+                        <View style={styles.gameCardStat}>
+                          <Ionicons name="calendar" size={16} color={theme.colors.accent} />
+                          <Text style={[styles.gameCardStatText, { color: theme.colors.textSecondary }]}>
+                            Starts Soon
+                          </Text>
+                        </View>
+                        <View style={styles.tapToJoinButton}>
+                          <Text style={styles.tapToJoinText}>View Details</Text>
+                          <Ionicons name="chevron-forward" size={18} color="#00D4E5" />
+                        </View>
+                      </View>
+                    </GradientCard>
+                  </TouchableOpacity>
+                ))
+              )}
             </View>
           )}
 

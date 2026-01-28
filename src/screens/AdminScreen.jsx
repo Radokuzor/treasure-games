@@ -41,10 +41,11 @@ import { getDb, hasFirebaseConfig } from '../config/firebase';
 import { useTheme } from '../context/ThemeContext';
 
 // Conditionally import native modules
-let ImagePicker, Location;
+let ImagePicker, Location, DateTimePicker;
 if (Platform.OS !== 'web') {
   ImagePicker = require('expo-image-picker');
   Location = require('expo-location');
+  DateTimePicker = require('@react-native-community/datetimepicker').default;
 } else {
   Location = require('expo-location');
 }
@@ -68,7 +69,9 @@ const AdminScreen = ({ navigation }) => {
   const [description, setDescription] = useState('');
   const [city, setCity] = useState('');
   const [selectedLocation, setSelectedLocation] = useState(null);
-  const [scheduledTime, setScheduledTime] = useState('');
+  const [scheduledTime, setScheduledTime] = useState(null); // Date object
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [difficulty, setDifficulty] = useState('medium');
   const [cluePhotos, setCluePhotos] = useState([]); // Array of photo URIs
   const [winnerSlots, setWinnerSlots] = useState('3');
@@ -180,6 +183,13 @@ const AdminScreen = ({ navigation }) => {
   const [redemptions, setRedemptions] = useState([]);
   const [loadingRedemptions, setLoadingRedemptions] = useState(true);
   const [userDetailsCache, setUserDetailsCache] = useState({}); // Cache for user details by ID
+
+  // Debug picker states
+  useEffect(() => {
+    console.log('🔍 DateTimePicker available:', !!DateTimePicker);
+    console.log('🔍 showDatePicker:', showDatePicker);
+    console.log('🔍 showTimePicker:', showTimePicker);
+  }, [showDatePicker, showTimePicker]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -699,7 +709,7 @@ const AdminScreen = ({ navigation }) => {
     setDescription('');
     setCity('');
     setSelectedLocation(null);
-    setScheduledTime('');
+    setScheduledTime(null);
     setCluePhotos([]);
     setWinnerSlots('3');
     setAccuracyRadius('10');
@@ -958,7 +968,7 @@ const AdminScreen = ({ navigation }) => {
 
     setIsCreating(true);
     setUploadingPhotos(true);
-    const status = scheduledTime.trim() ? 'scheduled' : 'pending';
+    const status = scheduledTime ? 'scheduled' : 'pending';
 
     try {
       // Build game data structure
@@ -970,7 +980,7 @@ const AdminScreen = ({ navigation }) => {
         city: city.trim() || null,
         difficulty,
         status,
-        scheduledTime: scheduledTime.trim() || null,
+        scheduledTime: scheduledTime ? { seconds: Math.floor(scheduledTime.getTime() / 1000), nanoseconds: 0 } : null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         participants: [],
@@ -2961,16 +2971,131 @@ const AdminScreen = ({ navigation }) => {
             <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
               Launch Time (Optional)
             </Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="time-outline" size={20} color={theme.colors.textSecondary} />
-              <TextInput
-                style={[styles.input, { color: theme.colors.text }]}
-                placeholder="2024-12-25 14:00"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={scheduledTime}
-                onChangeText={setScheduledTime}
-              />
-            </View>
+            {Platform.OS === 'web' ? (
+              <View style={styles.inputContainer}>
+                <Ionicons name="time-outline" size={20} color={theme.colors.textSecondary} />
+                <input
+                  type="datetime-local"
+                  value={scheduledTime ? scheduledTime.toISOString().slice(0, 16) : ''}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setScheduledTime(new Date(e.target.value));
+                    } else {
+                      setScheduledTime(null);
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    marginLeft: 10,
+                    padding: 12,
+                    fontSize: 16,
+                    backgroundColor: 'transparent',
+                    color: theme.colors.text,
+                    border: 'none',
+                    outline: 'none',
+                  }}
+                />
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.inputContainer}
+                  onPress={() => {
+                    console.log('📅 Date picker button pressed');
+                    setShowDatePicker(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
+                  <Text style={[styles.input, { color: scheduledTime ? theme.colors.text : theme.colors.textSecondary }]}>
+                    {scheduledTime ? scheduledTime.toLocaleDateString() : 'Select Date'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.inputContainer, { marginTop: 10 }]}
+                  onPress={() => {
+                    console.log('⏰ Time picker button pressed');
+                    setShowTimePicker(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="time-outline" size={20} color={theme.colors.textSecondary} />
+                  <Text style={[styles.input, { color: scheduledTime ? theme.colors.text : theme.colors.textSecondary }]}>
+                    {scheduledTime ? scheduledTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Select Time'}
+                  </Text>
+                </TouchableOpacity>
+                {scheduledTime && (
+                  <TouchableOpacity
+                    style={[styles.inputContainer, { marginTop: 10, backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}
+                    onPress={() => setScheduledTime(null)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#EF4444" />
+                    <Text style={[styles.input, { color: '#EF4444' }]}>
+                      Clear Schedule
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {showDatePicker && DateTimePicker && (
+                  <DateTimePicker
+                    value={scheduledTime || new Date()}
+                    mode="date"
+                    display="default"
+                    minimumDate={new Date()}
+                    onChange={(event, selectedDate) => {
+                      // On Android, dismiss is handled by the user
+                      if (Platform.OS === 'android') {
+                        setShowDatePicker(false);
+                      }
+                      
+                      // Handle the selected date
+                      if (event.type === 'set' && selectedDate) {
+                        const newDate = scheduledTime ? new Date(scheduledTime) : new Date();
+                        newDate.setFullYear(selectedDate.getFullYear());
+                        newDate.setMonth(selectedDate.getMonth());
+                        newDate.setDate(selectedDate.getDate());
+                        setScheduledTime(newDate);
+                        
+                        // On iOS, dismiss after selection
+                        if (Platform.OS === 'ios') {
+                          setShowDatePicker(false);
+                        }
+                      } else if (event.type === 'dismissed') {
+                        setShowDatePicker(false);
+                      }
+                    }}
+                  />
+                )}
+                {showTimePicker && DateTimePicker && (
+                  <DateTimePicker
+                    value={scheduledTime || new Date()}
+                    mode="time"
+                    display="default"
+                    onChange={(event, selectedTime) => {
+                      // On Android, dismiss is handled by the user
+                      if (Platform.OS === 'android') {
+                        setShowTimePicker(false);
+                      }
+                      
+                      // Handle the selected time
+                      if (event.type === 'set' && selectedTime) {
+                        const newDate = scheduledTime ? new Date(scheduledTime) : new Date();
+                        newDate.setHours(selectedTime.getHours());
+                        newDate.setMinutes(selectedTime.getMinutes());
+                        setScheduledTime(newDate);
+                        
+                        // On iOS, dismiss after selection
+                        if (Platform.OS === 'ios') {
+                          setShowTimePicker(false);
+                        }
+                      } else if (event.type === 'dismissed') {
+                        setShowTimePicker(false);
+                      }
+                    }}
+                  />
+                )}
+              </>
+            )}
           </View>
         </GradientCard>
 

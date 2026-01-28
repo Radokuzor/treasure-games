@@ -2,7 +2,7 @@
   "expo": {
     "name": "Grab The Cash",
     "slug": "HoodGames",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "hoodgames",
@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "11",
+      "buildNumber": "19",
       "infoPlist": {
         "CFBundleDisplayName": "Grab The Cash",
         "NSLocationWhenInUseUsageDescription": "Grab The Cash uses your location to help you find games nearby and compete for prizes.",
@@ -24,7 +24,7 @@
       "appleTeamId": "F2B5QD97WH"
     },
     "android": {
-      "versionCode": 12,
+      "versionCode": 13,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
